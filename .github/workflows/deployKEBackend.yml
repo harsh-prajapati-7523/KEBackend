@@ -1,4 +1,4 @@
-name: Deploy Backend
+name: Deploy KEBackend
 
 on:
   push:
@@ -19,4 +19,4 @@ jobs:
           git pull
           chmod +x gradlew
           ./gradlew clean build -x test
-          sudo systemctl restart backend
+          sudo systemctl restart KEbackend
