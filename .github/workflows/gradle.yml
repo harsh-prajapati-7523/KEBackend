@@ -20,5 +20,5 @@ jobs:
           script: |
             cd ~/apps/backend
             git pull
-            mvn clean package -DskipTests
+            ./gradlew clean build -x test
             sudo systemctl restart backend
