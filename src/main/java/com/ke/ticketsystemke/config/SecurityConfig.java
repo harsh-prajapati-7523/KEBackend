@@ -33,7 +33,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
 
                         .requestMatchers(
-                                "/auth/**")
+                                "/volt/auth/**")
                         .permitAll()
 
                         .anyRequest().authenticated())
