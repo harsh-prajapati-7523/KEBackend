@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/tickets")
+@RequestMapping("/tickets")
 @CrossOrigin(origins = "*")
 public class TicketController {
 
@@ -17,7 +17,6 @@ public class TicketController {
     @PostMapping("/create")
     public Ticket createTicket(
             @RequestBody Ticket ticket) {
-//A
         return service.saveTicket(ticket);
     }
 }

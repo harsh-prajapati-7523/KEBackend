@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/auth")
 @CrossOrigin
 public class AuthController {
 
@@ -24,7 +24,7 @@ public class AuthController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    @PostMapping("/login")
+    @PostMapping("/employeelogin")
     public ResponseEntity<?> login(
             @RequestBody LoginRequest request
     ) {
