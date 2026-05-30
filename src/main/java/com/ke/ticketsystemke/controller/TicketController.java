@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/volt/tickets")
-@CrossOrigin(origins = "*")
 public class TicketController {
 
     @Autowired

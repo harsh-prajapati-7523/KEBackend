@@ -38,3 +38,7 @@ out/
 
 ### Github-Action-runner ###
 actions-runner
+
+###TEST-SECRETS###
+.env.test
+

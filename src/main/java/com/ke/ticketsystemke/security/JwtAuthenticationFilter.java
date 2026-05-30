@@ -18,9 +18,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Collections;
 
+import org.springframework.beans.factory.annotation.Autowired;
+
 @Component
 public class JwtAuthenticationFilter
         extends OncePerRequestFilter {
+
+    @Autowired
+    private JwtService jwtService;
 
     @Override
     protected void doFilterInternal(
@@ -45,7 +50,7 @@ public class JwtAuthenticationFilter
         try {
 
             String employeeId =
-                    JwtUtil.extractEmployeeId(token);
+                    jwtService.extractEmployeeId(token);
 
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
