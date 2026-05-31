@@ -4,6 +4,8 @@ import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketCategory;
 import com.ke.ticketsystemke.entity.TicketStatus;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 
 public record TicketResponse(
@@ -25,10 +27,15 @@ public record TicketResponse(
         String completionRemark,
         Instant cancelledAt,
         String cancelledByEmployeeId,
-        String cancellationReason
+        String cancellationReason,
+        BigDecimal totalCharge
 ) {
 
     public static TicketResponse from(Ticket ticket) {
+        return from(ticket, BigDecimal.ZERO.setScale(2));
+    }
+
+    public static TicketResponse from(Ticket ticket, BigDecimal totalCharge) {
         return new TicketResponse(
                 ticket.getId(),
                 ticket.getTicketNumber(),
@@ -48,7 +55,8 @@ public record TicketResponse(
                 ticket.getCompletionRemark(),
                 ticket.getCancelledAt(),
                 ticket.getCancelledByEmployeeId(),
-                ticket.getCancellationReason()
+                ticket.getCancellationReason(),
+                totalCharge != null ? totalCharge.setScale(2, RoundingMode.UNNECESSARY) : BigDecimal.ZERO.setScale(2)
         );
     }
 }

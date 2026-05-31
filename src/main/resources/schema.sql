@@ -46,3 +46,19 @@ ALTER TABLE tickets
 
 ALTER TABLE tickets
     ADD COLUMN IF NOT EXISTS cancellation_reason VARCHAR(1000);
+
+CREATE TABLE IF NOT EXISTS ticket_charge_items (
+    id BIGSERIAL PRIMARY KEY,
+    ticket_id BIGINT NOT NULL,
+    description VARCHAR(120) NOT NULL,
+    amount NUMERIC(10,2) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    created_by_employee_id VARCHAR NOT NULL,
+    deleted_at TIMESTAMP,
+    deleted_by_employee_id VARCHAR,
+    CONSTRAINT fk_ticket_charge_items_ticket FOREIGN KEY (ticket_id)
+        REFERENCES tickets(id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_charge_items_ticket_id ON ticket_charge_items(ticket_id);

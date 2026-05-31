@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,9 +26,11 @@ public class TicketService {
     private static final Logger log = LoggerFactory.getLogger(TicketService.class);
 
     private final TicketRepository repository;
+    private final TicketChargeService ticketChargeService;
 
-    public TicketService(TicketRepository repository) {
+    public TicketService(TicketRepository repository, TicketChargeService ticketChargeService) {
         this.repository = repository;
+        this.ticketChargeService = ticketChargeService;
     }
 
     @Transactional
@@ -48,7 +52,8 @@ public class TicketService {
         ticket.setStatus(TicketStatus.NEW);
         ticket.setCreatedByEmployeeId(createdByEmployeeId);
 
-        return TicketResponse.from(repository.save(ticket));
+        Ticket saved = repository.save(ticket);
+        return TicketResponse.from(saved, BigDecimal.ZERO.setScale(2));
     }
 
     @Transactional
@@ -67,7 +72,8 @@ public class TicketService {
             String previousOwner = ticket.getPickedByEmployeeId();
             ticket.setStatus(TicketStatus.PICKED);
             ticket.setPickedByEmployeeId(employeeId);
-            TicketResponse resp = TicketResponse.from(repository.save(ticket));
+            Ticket saved = repository.save(ticket);
+            TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
             log.info("event=ticket_picked ticketId={} previousOwner={} newOwner={}", ticketId, previousOwner, employeeId);
             return resp;
         }
@@ -94,7 +100,8 @@ public class TicketService {
             ticket.setStatus(TicketStatus.IN_PROGRESS);
             String previousOwner = ticket.getPickedByEmployeeId();
             ticket.setPickedByEmployeeId(employeeId);
-            TicketResponse resp = TicketResponse.from(repository.save(ticket));
+            Ticket saved = repository.save(ticket);
+            TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
             log.info("event=ticket_started ticketId={} previousOwner={} employeeId={} statusTransition=PICKED->IN_PROGRESS", ticketId, previousOwner, employeeId);
             return resp;
         }
@@ -140,7 +147,8 @@ public class TicketService {
         ticket.setCompletedByEmployeeId(employeeId);
         ticket.setCompletionRemark(trimToNull(request.getCompletionRemark()));
 
-        TicketResponse resp = TicketResponse.from(repository.save(ticket));
+        Ticket saved = repository.save(ticket);
+        TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
         log.info("event=ticket_completed ticketId={} ticketNumber={} employeeId={} statusTransition=IN_PROGRESS->COMPLETED", ticketId, ticket.getTicketNumber(), employeeId);
         return resp;
     }
@@ -180,7 +188,8 @@ public class TicketService {
         ticket.setCancelledByEmployeeId(employeeId);
         ticket.setCancellationReason(request.getCancellationReason().trim());
 
-        TicketResponse resp = TicketResponse.from(repository.save(ticket));
+        Ticket saved = repository.save(ticket);
+        TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
         log.info("event=ticket_cancelled ticketId={} ticketNumber={} employeeId={} statusTransition={}->CANCELLED", ticketId, ticket.getTicketNumber(), employeeId, previousStatus);
         return resp;
     }
@@ -192,7 +201,7 @@ public class TicketService {
     public List<TicketResponse> listTickets() {
         List<TicketResponse> list = repository.findAllByOrderByCreatedAtDesc()
             .stream()
-            .map(TicketResponse::from)
+            .map(ticket -> TicketResponse.from(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
             .toList();
         log.info("event=ticket_list_returned count={}", list.size());
         return list;
