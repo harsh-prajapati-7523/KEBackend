@@ -1,5 +1,7 @@
 package com.ke.ticketsystemke.security;
 
+import com.ke.ticketsystemke.entity.Employee;
+import com.ke.ticketsystemke.repository.EmployeeRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 
@@ -16,7 +19,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -26,6 +30,9 @@ public class JwtAuthenticationFilter
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
 
     @Override
     protected void doFilterInternal(
@@ -52,11 +59,22 @@ public class JwtAuthenticationFilter
             String employeeId =
                     jwtService.extractEmployeeId(token);
 
+            Employee employee = employeeRepository
+                    .findByEmployeeId(employeeId)
+                    .orElseThrow();
+
+            String role = employee
+                    .getRole()
+                    .trim()
+                    .toUpperCase(Locale.ROOT);
+
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
                             employeeId,
                             null,
-                            Collections.emptyList()
+                            List.of(new SimpleGrantedAuthority(
+                                    "ROLE_" + role
+                            ))
                     );
 
             authentication.setDetails(

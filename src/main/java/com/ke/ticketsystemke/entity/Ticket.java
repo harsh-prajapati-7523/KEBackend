@@ -3,7 +3,10 @@ package com.ke.ticketsystemke.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.time.Instant;
+
 @Entity
+@Table(name = "tickets")
 @Data
 public class Ticket {
 
@@ -11,20 +14,49 @@ public class Ticket {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false, unique = true)
+    private String ticketNumber;
+
+    @Column(nullable = false)
     private String customerName;
 
-    private String mobileNo;
+    @Column(nullable = false, length = 10)
+    private String mobileNumber;
 
-    private String equipmentName;
+    private String villageOrArea;
 
-    private String issue;
+    @Column(nullable = false)
+    private String productType;
 
-    private String address;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private TicketCategory category;
 
-    private String priority;
+    @Column(nullable = false, length = 1000)
+    private String complaintDescription;
 
-    private String serviceDate;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private TicketStatus status;
 
-    @Column(length = 1000)
-    private String description;
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(nullable = false)
+    private Instant updatedAt;
+
+    @Column(nullable = false, updatable = false)
+    private String createdByEmployeeId;
+
+    @PrePersist
+    void setCreationTimestamps() {
+        Instant now = Instant.now();
+        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    void setUpdatedTimestamp() {
+        updatedAt = Instant.now();
+    }
 }
