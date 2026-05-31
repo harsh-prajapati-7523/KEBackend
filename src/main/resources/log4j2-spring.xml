@@ -2,7 +2,7 @@
 <Configuration status="WARN">
     <Properties>
         <!-- Configurable log file location via system property or environment -->
-        <Property name="logFile">${sys:logFile:-logs/application.log}</Property>
+        <Property name="logFile">${spring:logging.file.name:-logs/application.log}</Property>
         <Property name="logPattern">%d{yyyy-MM-dd HH:mm:ss.SSS} level=%p thread=%t logger=%c correlationId=%X{correlationId} employeeId=%X{employeeId} event=%X{event} endpoint=%X{endpoint} httpMethod=%X{httpMethod} httpStatus=%X{httpStatus} ticketId=%X{ticketId} ticketNumber=%X{ticketNumber} message=%m%n%xThrowable</Property>
     </Properties>
 
