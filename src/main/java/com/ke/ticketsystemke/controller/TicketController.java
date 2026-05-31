@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -43,5 +44,21 @@ public class TicketController {
     @GetMapping
     public List<TicketResponse> listTickets() {
         return service.listTickets();
+    }
+
+    @PostMapping("/{id}/pick")
+    public TicketResponse pickTicket(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        return service.pickTicket(id, authentication.getName());
+    }
+
+    @PostMapping("/{id}/start-work")
+    public TicketResponse startWork(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        return service.startWork(id, authentication.getName());
     }
 }

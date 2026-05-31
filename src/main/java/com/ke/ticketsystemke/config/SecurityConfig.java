@@ -59,6 +59,16 @@ public class SecurityConfig {
                                 "ADMIN")
 
                         .requestMatchers(
+                                HttpMethod.POST,
+                                "/volt/tickets/*/pick",
+                                "/volt/tickets/*/start-work")
+                        .hasAnyRole(
+                                "SUPER_ADMIN",
+                                "ADMIN",
+                                "EMPLOYEE",
+                                "TECHNICIAN")
+
+                        .requestMatchers(
                                 HttpMethod.GET,
                                 "/volt/tickets")
                         .authenticated()

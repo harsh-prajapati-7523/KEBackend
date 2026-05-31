@@ -48,6 +48,9 @@ public class Ticket {
     @Column(nullable = false, updatable = false)
     private String createdByEmployeeId;
 
+    @Column(name = "picked_by_employee_id")
+    private String pickedByEmployeeId;
+
     @PrePersist
     void setCreationTimestamps() {
         Instant now = Instant.now();

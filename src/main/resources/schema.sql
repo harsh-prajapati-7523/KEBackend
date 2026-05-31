@@ -25,3 +25,6 @@ VALUES (
 CREATE SEQUENCE IF NOT EXISTS ticket_number_seq
     START WITH 1
     INCREMENT BY 1;
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS picked_by_employee_id VARCHAR;

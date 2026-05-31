@@ -18,7 +18,8 @@ public record TicketResponse(
         TicketStatus status,
         Instant createdAt,
         Instant updatedAt,
-        String createdByEmployeeId
+        String createdByEmployeeId,
+        String pickedByEmployeeId
 ) {
 
     public static TicketResponse from(Ticket ticket) {
@@ -34,7 +35,8 @@ public record TicketResponse(
                 ticket.getStatus(),
                 ticket.getCreatedAt(),
                 ticket.getUpdatedAt(),
-                ticket.getCreatedByEmployeeId()
+                ticket.getCreatedByEmployeeId(),
+                ticket.getPickedByEmployeeId()
         );
     }
 }
