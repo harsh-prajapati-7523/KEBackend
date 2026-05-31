@@ -1,5 +1,7 @@
 package com.ke.ticketsystemke.service;
 
+import com.ke.ticketsystemke.dto.CancelTicketRequest;
+import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.entity.Ticket;
@@ -12,8 +14,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -102,6 +104,89 @@ public class TicketService {
             HttpStatus.BAD_REQUEST,
             "Ticket can only be started from PICKED status"
         );
+    }
+
+    @Transactional
+    public TicketResponse completeTicket(
+            Long ticketId,
+            CompleteTicketRequest request,
+            String employeeId,
+            String role
+    ) {
+        Ticket ticket = repository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"
+                ));
+
+        if (ticket.getStatus() != TicketStatus.IN_PROGRESS) {
+            log.warn("event=invalid_status_transition ticketId={} status={} attemptedAction=complete", ticketId, ticket.getStatus());
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ticket can only be completed from IN_PROGRESS status"
+            );
+        }
+
+        if (!isAdminRole(role) && !employeeId.equals(ticket.getPickedByEmployeeId())) {
+            log.warn("event=completion_denied ticketId={} status={} employeeId={} role={}", ticketId, ticket.getStatus(), employeeId, role);
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Not authorized to complete this ticket"
+            );
+        }
+
+        ticket.setStatus(TicketStatus.COMPLETED);
+        ticket.setCompletedAt(Instant.now());
+        ticket.setCompletedByEmployeeId(employeeId);
+        ticket.setCompletionRemark(trimToNull(request.getCompletionRemark()));
+
+        TicketResponse resp = TicketResponse.from(repository.save(ticket));
+        log.info("event=ticket_completed ticketId={} ticketNumber={} employeeId={} statusTransition=IN_PROGRESS->COMPLETED", ticketId, ticket.getTicketNumber(), employeeId);
+        return resp;
+    }
+
+    @Transactional
+    public TicketResponse cancelTicket(
+            Long ticketId,
+            CancelTicketRequest request,
+            String employeeId,
+            String role
+    ) {
+        Ticket ticket = repository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"
+                ));
+
+        if (ticket.getStatus() == TicketStatus.COMPLETED || ticket.getStatus() == TicketStatus.CANCELLED) {
+            log.warn("event=invalid_status_transition ticketId={} status={} attemptedAction=cancel", ticketId, ticket.getStatus());
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ticket cannot be cancelled in its current status"
+            );
+        }
+
+        if (!isAdminRole(role)) {
+            log.warn("event=cancellation_denied ticketId={} status={} employeeId={} role={}", ticketId, ticket.getStatus(), employeeId, role);
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Not authorized to cancel this ticket"
+            );
+        }
+
+        TicketStatus previousStatus = ticket.getStatus();
+        ticket.setStatus(TicketStatus.CANCELLED);
+        ticket.setCancelledAt(Instant.now());
+        ticket.setCancelledByEmployeeId(employeeId);
+        ticket.setCancellationReason(request.getCancellationReason().trim());
+
+        TicketResponse resp = TicketResponse.from(repository.save(ticket));
+        log.info("event=ticket_cancelled ticketId={} ticketNumber={} employeeId={} statusTransition={}->CANCELLED", ticketId, ticket.getTicketNumber(), employeeId, previousStatus);
+        return resp;
+    }
+
+    private boolean isAdminRole(String role) {
+        return "SUPER_ADMIN".equals(role) || "ADMIN".equals(role);
     }
 
     public List<TicketResponse> listTickets() {

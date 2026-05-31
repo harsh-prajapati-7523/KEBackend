@@ -51,6 +51,22 @@ public class Ticket {
     @Column(name = "picked_by_employee_id")
     private String pickedByEmployeeId;
 
+    private Instant completedAt;
+
+    @Column(name = "completed_by_employee_id")
+    private String completedByEmployeeId;
+
+    @Column(length = 1000)
+    private String completionRemark;
+
+    private Instant cancelledAt;
+
+    @Column(name = "cancelled_by_employee_id")
+    private String cancelledByEmployeeId;
+
+    @Column(length = 1000)
+    private String cancellationReason;
+
     @PrePersist
     void setCreationTimestamps() {
         Instant now = Instant.now();

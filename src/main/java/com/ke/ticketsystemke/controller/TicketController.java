@@ -1,5 +1,7 @@
 package com.ke.ticketsystemke.controller;
 
+import com.ke.ticketsystemke.dto.CancelTicketRequest;
+import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.service.TicketService;
@@ -7,6 +9,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 
 @RestController
 @RequestMapping("/volt/tickets")
@@ -81,5 +83,43 @@ public class TicketController {
         TicketResponse resp = service.startWork(id, employeeId);
         log.info("event=ticket_started ticketId={} ticketNumber={} employeeId={}", resp.id(), resp.ticketNumber(), employeeId);
         return resp;
+    }
+
+    @PostMapping("/{id}/complete")
+    public TicketResponse completeTicket(
+            @PathVariable Long id,
+            @Valid @RequestBody CompleteTicketRequest request,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        String role = extractRole(authentication);
+        log.info("event=ticket_complete_requested ticketId={} employeeId={} role={}", id, employeeId, role);
+        TicketResponse resp = service.completeTicket(id, request, employeeId, role);
+        log.info("event=ticket_completed ticketId={} ticketNumber={} employeeId={}", resp.id(), resp.ticketNumber(), employeeId);
+        return resp;
+    }
+
+    @PostMapping("/{id}/cancel")
+    public TicketResponse cancelTicket(
+            @PathVariable Long id,
+            @Valid @RequestBody CancelTicketRequest request,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        String role = extractRole(authentication);
+        log.info("event=ticket_cancel_requested ticketId={} employeeId={} role={}", id, employeeId, role);
+        TicketResponse resp = service.cancelTicket(id, request, employeeId, role);
+        log.info("event=ticket_cancelled ticketId={} ticketNumber={} employeeId={}", resp.id(), resp.ticketNumber(), employeeId);
+        return resp;
+    }
+
+    private String extractRole(Authentication authentication) {
+        return authentication.getAuthorities()
+                .stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(authority -> authority.startsWith("ROLE_"))
+                .map(authority -> authority.substring("ROLE_".length()))
+                .findFirst()
+                .orElse("");
     }
 }

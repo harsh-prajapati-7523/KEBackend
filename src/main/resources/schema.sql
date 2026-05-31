@@ -28,3 +28,21 @@ CREATE SEQUENCE IF NOT EXISTS ticket_number_seq
 
 ALTER TABLE tickets
     ADD COLUMN IF NOT EXISTS picked_by_employee_id VARCHAR;
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP;
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS completed_by_employee_id VARCHAR;
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS completion_remark VARCHAR(1000);
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP;
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS cancelled_by_employee_id VARCHAR;
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS cancellation_reason VARCHAR(1000);

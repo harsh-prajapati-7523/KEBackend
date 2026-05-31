@@ -19,7 +19,13 @@ public record TicketResponse(
         Instant createdAt,
         Instant updatedAt,
         String createdByEmployeeId,
-        String pickedByEmployeeId
+        String pickedByEmployeeId,
+        Instant completedAt,
+        String completedByEmployeeId,
+        String completionRemark,
+        Instant cancelledAt,
+        String cancelledByEmployeeId,
+        String cancellationReason
 ) {
 
     public static TicketResponse from(Ticket ticket) {
@@ -36,7 +42,13 @@ public record TicketResponse(
                 ticket.getCreatedAt(),
                 ticket.getUpdatedAt(),
                 ticket.getCreatedByEmployeeId(),
-                ticket.getPickedByEmployeeId()
+                ticket.getPickedByEmployeeId(),
+                ticket.getCompletedAt(),
+                ticket.getCompletedByEmployeeId(),
+                ticket.getCompletionRemark(),
+                ticket.getCancelledAt(),
+                ticket.getCancelledByEmployeeId(),
+                ticket.getCancellationReason()
         );
     }
 }
