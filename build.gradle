@@ -18,6 +18,11 @@ repositories {
     mavenCentral()
 }
 
+configurations.configureEach {
+    exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    exclude group: 'org.apache.logging.log4j', module: 'log4j-to-slf4j'
+}
+
 dependencies {
     // Spring Security
     implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -42,6 +47,11 @@ dependencies {
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // Logging: replace default Logback with Log4j2 via Spring Boot starter
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    // Structured layout helper (JSON template) — optional, pinned to recent 2.x
+    implementation 'org.apache.logging.log4j:log4j-layout-template-json'
 }
 
 tasks.named('test') {

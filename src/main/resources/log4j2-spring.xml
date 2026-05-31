@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Properties>
+        <!-- Configurable log file location via system property or environment -->
+        <Property name="logFile">${sys:logFile:-logs/application.log}</Property>
+        <Property name="logPattern">%d{yyyy-MM-dd HH:mm:ss.SSS} level=%p thread=%t logger=%c correlationId=%X{correlationId} employeeId=%X{employeeId} event=%X{event} endpoint=%X{endpoint} httpMethod=%X{httpMethod} httpStatus=%X{httpStatus} ticketId=%X{ticketId} ticketNumber=%X{ticketNumber} message=%m%n%xThrowable</Property>
+    </Properties>
+
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${logPattern}"/>
+        </Console>
+
+        <RollingFile name="RollingFile"
+                     fileName="${logFile}"
+                     filePattern="${logFile}-%d{yyyy-MM-dd}-%i.gz">
+            <PatternLayout pattern="${logPattern}"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy />
+                <SizeBasedTriggeringPolicy size="50 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="14"/>
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <Logger name="com.ke.ticketsystemke" level="info" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RollingFile"/>
+        </Logger>
+
+        <Root level="info">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RollingFile"/>
+        </Root>
+    </Loggers>
+</Configuration>

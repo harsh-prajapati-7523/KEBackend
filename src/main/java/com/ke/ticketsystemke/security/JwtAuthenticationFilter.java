@@ -23,10 +23,15 @@ import java.util.List;
 import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 @Component
 public class JwtAuthenticationFilter
         extends OncePerRequestFilter {
+
+        private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     @Autowired
     private JwtService jwtService;
@@ -47,6 +52,8 @@ public class JwtAuthenticationFilter
         if (authHeader == null ||
                 !authHeader.startsWith("Bearer ")) {
 
+            // No bearer token present; do not leak info for public auth endpoints
+            log.debug("event=missing_bearer_token endpoint={} method={}", request.getRequestURI(), request.getMethod());
             filterChain.doFilter(request, response);
             return;
         }
@@ -56,8 +63,7 @@ public class JwtAuthenticationFilter
 
         try {
 
-            String employeeId =
-                    jwtService.extractEmployeeId(token);
+            String employeeId = jwtService.extractEmployeeId(token);
 
             Employee employee = employeeRepository
                     .findByEmployeeId(employeeId)
@@ -82,16 +88,22 @@ public class JwtAuthenticationFilter
                             .buildDetails(request)
             );
 
-            SecurityContextHolder
-                    .getContext()
-                    .setAuthentication(authentication);
+            // set employeeId in MDC for downstream logs
+            MDC.put("employeeId", employeeId);
+            log.info("event=authentication_success employeeId={}", employeeId);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
 
         } catch (Exception e) {
 
+            log.warn("event=jwt_validation_failed endpoint={} method={} reason={}", request.getRequestURI(), request.getMethod(), e.getClass().getSimpleName());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
 
-        filterChain.doFilter(request, response);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            MDC.remove("employeeId");
+        }
     }
 }

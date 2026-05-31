@@ -8,12 +8,18 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 
 @Service
 public class JwtService {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
 
     @Value("${jwt.secret:${JWT_SECRET}}")
     private String secret;
@@ -42,7 +48,11 @@ public class JwtService {
                 .parseClaimsJws(token)
                 .getBody();
 
-        return claims.getSubject();
+        String subject = claims.getSubject();
+        if (subject == null) {
+            log.warn("event=jwt_parse_failed reason=no_subject correlationId={}", MDC.get("correlationId"));
+        }
+        return subject;
     }
 
     public boolean isTokenValid(String token, String employeeId) {
