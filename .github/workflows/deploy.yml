@@ -28,18 +28,26 @@ jobs:
       - name: Deploy backend to TEST
         if: github.event_name == 'push' && github.ref == 'refs/heads/test'
         run: |
+          JAR_FILE=$(ls build/libs/*.jar | head -n 1)
+
           sudo mkdir -p /opt/keonline/test/backend
-          sudo cp build/libs/*.jar /opt/keonline/test/backend/app.jar
+          sudo rm -rf /opt/keonline/test/backend/app.jar
+          sudo cp "$JAR_FILE" /opt/keonline/test/backend/app.jar
           sudo chown harsh:harsh /opt/keonline/test/backend/app.jar
+
           sudo systemctl restart kebackend-test.service
           sudo systemctl status kebackend-test.service --no-pager
 
       - name: Deploy backend to PROD
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
+          JAR_FILE=$(ls build/libs/*.jar | head -n 1)
+
           sudo mkdir -p /opt/keonline/prod/backend
-          sudo cp build/libs/*.jar /opt/keonline/prod/backend/app.jar
+          sudo rm -rf /opt/keonline/prod/backend/app.jar
+          sudo cp "$JAR_FILE" /opt/keonline/prod/backend/app.jar
           sudo chown harsh:harsh /opt/keonline/prod/backend/app.jar
+
           sudo systemctl restart kebackend-prod.service
           sudo systemctl status kebackend-prod.service --no-pager
 
