@@ -65,18 +65,44 @@ jobs:
           sudo systemctl restart kebackend-prod.service
           sudo systemctl status kebackend-prod.service --no-pager
 
-      - name: Verify PROD backend port
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "Checking prod backend on port 9001..."
-          sleep 8
-          sudo systemctl status kebackend-prod.service --no-pager
-          sudo ss -ltnp | grep ':9001'
-
       - name: Verify TEST backend port
         if: github.event_name == 'push' && github.ref == 'refs/heads/test'
         run: |
           echo "Checking test backend on port 9002..."
-          sleep 8
+
+          for i in {1..30}; do
+            if sudo ss -ltnp | grep -q ':9002'; then
+              echo "TEST backend is listening on port 9002"
+              sudo ss -ltnp | grep ':9002'
+              exit 0
+            fi
+
+            echo "Waiting for TEST backend to start... attempt $i/30"
+            sleep 2
+          done
+
+          echo "TEST backend did not start listening on port 9002"
           sudo systemctl status kebackend-test.service --no-pager
-          sudo ss -ltnp | grep ':9002'
+          journalctl -u kebackend-test.service -n 80 --no-pager -l
+          exit 1
+
+      - name: Verify PROD backend port
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "Checking prod backend on port 9001..."
+
+          for i in {1..30}; do
+            if sudo ss -ltnp | grep -q ':9001'; then
+              echo "PROD backend is listening on port 9001"
+              sudo ss -ltnp | grep ':9001'
+              exit 0
+            fi
+
+            echo "Waiting for PROD backend to start... attempt $i/30"
+            sleep 2
+          done
+
+          echo "PROD backend did not start listening on port 9001"
+          sudo systemctl status kebackend-prod.service --no-pager
+          journalctl -u kebackend-prod.service -n 80 --no-pager -l
+          exit 1
