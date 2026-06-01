@@ -67,6 +67,27 @@ public class Ticket {
     @Column(length = 1000)
     private String cancellationReason;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private WarrantyStatus warrantyStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ManufacturerStatus manufacturerStatus;
+
+    @Column(length = 80)
+    private String manufacturerComplaintNumber;
+
+    @Column(length = 80)
+    private String manufacturerOrBrandName;
+
+    @Column(length = 80)
+    private String productSerialNumber;
+
+    private Instant warrantyUpdatedAt;
+
+    private String warrantyUpdatedByEmployeeId;
+
     @PrePersist
     void setCreationTimestamps() {
         Instant now = Instant.now();

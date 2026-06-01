@@ -4,8 +4,11 @@ import com.ke.ticketsystemke.dto.CancelTicketRequest;
 import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.TicketResponse;
+import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
+import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketStatus;
+import com.ke.ticketsystemke.entity.WarrantyStatus;
 import com.ke.ticketsystemke.repository.TicketRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -51,6 +54,18 @@ public class TicketService {
         ticket.setComplaintDescription(request.getComplaintDescription().trim());
         ticket.setStatus(TicketStatus.NEW);
         ticket.setCreatedByEmployeeId(createdByEmployeeId);
+        validateWarrantyDetails(
+                request.getWarrantyStatus(),
+                request.getManufacturerOrBrandName(),
+                request.getProductSerialNumber()
+        );
+        ticket.setWarrantyStatus(request.getWarrantyStatus());
+        ticket.setManufacturerStatus(ManufacturerStatus.NOT_REQUIRED);
+        ticket.setManufacturerComplaintNumber(trimToNull(request.getManufacturerComplaintNumber()));
+        ticket.setManufacturerOrBrandName(trimToNull(request.getManufacturerOrBrandName()));
+        ticket.setProductSerialNumber(trimToNull(request.getProductSerialNumber()));
+        ticket.setWarrantyUpdatedAt(Instant.now());
+        ticket.setWarrantyUpdatedByEmployeeId(createdByEmployeeId);
 
         Ticket saved = repository.save(ticket);
         return TicketResponse.from(saved, BigDecimal.ZERO.setScale(2));
@@ -142,6 +157,15 @@ public class TicketService {
             );
         }
 
+        if (ticket.getWarrantyStatus() == WarrantyStatus.NOT_CHECKED) {
+            log.warn("event=warranty_completion_blocked ticketId={} ticketNumber={} employeeId={} warrantyStatus={} manufacturerStatus={}",
+                    ticketId, ticket.getTicketNumber(), employeeId, ticket.getWarrantyStatus(), ticket.getManufacturerStatus());
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ticket warranty must be confirmed before completion"
+            );
+        }
+
         ticket.setStatus(TicketStatus.COMPLETED);
         ticket.setCompletedAt(Instant.now());
         ticket.setCompletedByEmployeeId(employeeId);
@@ -151,6 +175,61 @@ public class TicketService {
         TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
         log.info("event=ticket_completed ticketId={} ticketNumber={} employeeId={} statusTransition=IN_PROGRESS->COMPLETED", ticketId, ticket.getTicketNumber(), employeeId);
         return resp;
+    }
+
+    @Transactional
+    public TicketResponse updateWarranty(
+            Long ticketId,
+            UpdateWarrantyRequest request,
+            String employeeId,
+            String role
+    ) {
+        Ticket ticket = repository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"
+                ));
+
+        if (!isOperationalRole(role)) {
+            log.warn("event=warranty_update_denied ticketId={} ticketNumber={} employeeId={} warrantyStatus={} manufacturerStatus={}",
+                    ticketId, ticket.getTicketNumber(), employeeId, ticket.getWarrantyStatus(), ticket.getManufacturerStatus());
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not authorized to update ticket warranty");
+        }
+
+        if (ticket.getStatus() == TicketStatus.CANCELLED) {
+            log.warn("event=warranty_update_denied ticketId={} ticketNumber={} employeeId={} warrantyStatus={} manufacturerStatus={}",
+                    ticketId, ticket.getTicketNumber(), employeeId, ticket.getWarrantyStatus(), ticket.getManufacturerStatus());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cancelled ticket warranty cannot be updated");
+        }
+
+        WarrantyStatus previousWarrantyStatus = ticket.getWarrantyStatus();
+        if (!isSuperAdminRole(role)
+                && previousWarrantyStatus != WarrantyStatus.NOT_CHECKED
+                && previousWarrantyStatus != request.getWarrantyStatus()) {
+            log.warn("event=invalid_warranty_status_change ticketId={} ticketNumber={} employeeId={} warrantyStatus={} manufacturerStatus={}",
+                    ticketId, ticket.getTicketNumber(), employeeId, previousWarrantyStatus, ticket.getManufacturerStatus());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Confirmed warranty status cannot be changed");
+        }
+
+        validateWarrantyDetails(
+                request.getWarrantyStatus(),
+                request.getManufacturerOrBrandName(),
+                request.getProductSerialNumber()
+        );
+
+        ticket.setWarrantyStatus(request.getWarrantyStatus());
+        ticket.setManufacturerStatus(request.getManufacturerStatus());
+        ticket.setManufacturerComplaintNumber(trimToNull(request.getManufacturerComplaintNumber()));
+        ticket.setManufacturerOrBrandName(trimToNull(request.getManufacturerOrBrandName()));
+        ticket.setProductSerialNumber(trimToNull(request.getProductSerialNumber()));
+        ticket.setWarrantyUpdatedAt(Instant.now());
+        ticket.setWarrantyUpdatedByEmployeeId(employeeId);
+
+        Ticket saved = repository.save(ticket);
+        TicketResponse response = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
+        log.info("event=warranty_updated ticketId={} ticketNumber={} employeeId={} warrantyStatus={} manufacturerStatus={}",
+                ticketId, saved.getTicketNumber(), employeeId, saved.getWarrantyStatus(), saved.getManufacturerStatus());
+        return response;
     }
 
     @Transactional
@@ -198,6 +277,14 @@ public class TicketService {
         return "SUPER_ADMIN".equals(role) || "ADMIN".equals(role);
     }
 
+    private boolean isSuperAdminRole(String role) {
+        return "SUPER_ADMIN".equals(role);
+    }
+
+    private boolean isOperationalRole(String role) {
+        return isAdminRole(role) || "EMPLOYEE".equals(role) || "TECHNICIAN".equals(role);
+    }
+
     public List<TicketResponse> listTickets() {
         List<TicketResponse> list = repository.findAllByOrderByCreatedAtDesc()
             .stream()
@@ -217,5 +304,24 @@ public class TicketService {
         }
 
         return value.trim();
+    }
+
+    private void validateWarrantyDetails(
+            WarrantyStatus warrantyStatus,
+            String manufacturerOrBrandName,
+            String productSerialNumber
+    ) {
+        if (warrantyStatus == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Warranty status is required");
+        }
+
+        if (warrantyStatus == WarrantyStatus.IN_WARRANTY) {
+            if (trimToNull(manufacturerOrBrandName) == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Manufacturer or brand name is required for in-warranty tickets");
+            }
+            if (trimToNull(productSerialNumber) == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product serial number is required for in-warranty tickets");
+            }
+        }
     }
 }

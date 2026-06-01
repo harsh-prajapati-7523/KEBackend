@@ -4,6 +4,7 @@ import com.ke.ticketsystemke.dto.CancelTicketRequest;
 import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.TicketResponse;
+import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.service.TicketService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -111,6 +113,17 @@ public class TicketController {
         TicketResponse resp = service.cancelTicket(id, request, employeeId, role);
         log.info("event=ticket_cancelled ticketId={} ticketNumber={} employeeId={}", resp.id(), resp.ticketNumber(), employeeId);
         return resp;
+    }
+
+    @PatchMapping("/{id}/warranty")
+    public TicketResponse updateWarranty(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateWarrantyRequest request,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        String role = extractRole(authentication);
+        return service.updateWarranty(id, request, employeeId, role);
     }
 
     private String extractRole(Authentication authentication) {

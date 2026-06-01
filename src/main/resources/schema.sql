@@ -47,6 +47,27 @@ ALTER TABLE tickets
 ALTER TABLE tickets
     ADD COLUMN IF NOT EXISTS cancellation_reason VARCHAR(1000);
 
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS warranty_status VARCHAR NOT NULL DEFAULT 'NOT_CHECKED';
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS manufacturer_status VARCHAR NOT NULL DEFAULT 'NOT_REQUIRED';
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS manufacturer_complaint_number VARCHAR(80);
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS manufacturer_or_brand_name VARCHAR(80);
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS product_serial_number VARCHAR(80);
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS warranty_updated_at TIMESTAMP;
+
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS warranty_updated_by_employee_id VARCHAR;
+
 CREATE TABLE IF NOT EXISTS ticket_charge_items (
     id BIGSERIAL PRIMARY KEY,
     ticket_id BIGINT NOT NULL,
