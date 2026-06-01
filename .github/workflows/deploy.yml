@@ -65,7 +65,18 @@ jobs:
           sudo systemctl restart kebackend-prod.service
           sudo systemctl status kebackend-prod.service --no-pager
 
-      - name: Verify backend ports
-        if: github.event_name == 'push'
+      - name: Verify PROD backend port
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          sudo ss -ltnp | grep -E ':9001|:9002'
+          echo "Checking prod backend on port 9001..."
+          sleep 8
+          sudo systemctl status kebackend-prod.service --no-pager
+          sudo ss -ltnp | grep ':9001'
+
+      - name: Verify TEST backend port
+        if: github.event_name == 'push' && github.ref == 'refs/heads/test'
+        run: |
+          echo "Checking test backend on port 9002..."
+          sleep 8
+          sudo systemctl status kebackend-test.service --no-pager
+          sudo ss -ltnp | grep ':9002'
