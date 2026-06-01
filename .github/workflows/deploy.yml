@@ -28,7 +28,14 @@ jobs:
       - name: Deploy backend to TEST
         if: github.event_name == 'push' && github.ref == 'refs/heads/test'
         run: |
-          JAR_FILE=$(ls build/libs/*.jar | head -n 1)
+          JAR_FILE=$(find build/libs -maxdepth 1 -type f -name "*.jar" ! -name "*plain.jar" | head -n 1)
+
+          if [ -z "$JAR_FILE" ]; then
+            echo "No executable Spring Boot JAR found"
+            echo "Available files:"
+            ls -lh build/libs
+            exit 1
+          fi
 
           sudo mkdir -p /opt/keonline/test/backend
           sudo rm -rf /opt/keonline/test/backend/app.jar
@@ -41,7 +48,14 @@ jobs:
       - name: Deploy backend to PROD
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          JAR_FILE=$(ls build/libs/*.jar | head -n 1)
+          JAR_FILE=$(find build/libs -maxdepth 1 -type f -name "*.jar" ! -name "*plain.jar" | head -n 1)
+
+          if [ -z "$JAR_FILE" ]; then
+            echo "No executable Spring Boot JAR found"
+            echo "Available files:"
+            ls -lh build/libs
+            exit 1
+          fi
 
           sudo mkdir -p /opt/keonline/prod/backend
           sudo rm -rf /opt/keonline/prod/backend/app.jar
