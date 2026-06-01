@@ -1,0 +1,49 @@
+name: Deploy KEBackend
+
+on:
+  push:
+    branches:
+      - test
+      - main
+
+  pull_request:
+    branches:
+      - test
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Prepare Gradle wrapper
+        run: chmod +x gradlew
+
+      - name: Build backend
+        run: ./gradlew clean build -x test
+
+      - name: Deploy backend to TEST
+        if: github.event_name == 'push' && github.ref == 'refs/heads/test'
+        run: |
+          sudo mkdir -p /opt/keonline/test/backend
+          sudo cp build/libs/*.jar /opt/keonline/test/backend/app.jar
+          sudo chown harsh:harsh /opt/keonline/test/backend/app.jar
+          sudo systemctl restart kebackend-test.service
+          sudo systemctl status kebackend-test.service --no-pager
+
+      - name: Deploy backend to PROD
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          sudo mkdir -p /opt/keonline/prod/backend
+          sudo cp build/libs/*.jar /opt/keonline/prod/backend/app.jar
+          sudo chown harsh:harsh /opt/keonline/prod/backend/app.jar
+          sudo systemctl restart kebackend-prod.service
+          sudo systemctl status kebackend-prod.service --no-pager
+
+      - name: Verify backend ports
+        if: github.event_name == 'push'
+        run: |
+          sudo ss -ltnp | grep -E ':9001|:9002'
