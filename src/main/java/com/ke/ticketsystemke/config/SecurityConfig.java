@@ -97,6 +97,11 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 HttpMethod.GET,
+                                "/volt/tickets/query")
+                        .authenticated()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
                                 "/volt/tickets/search")
                         .authenticated()
 

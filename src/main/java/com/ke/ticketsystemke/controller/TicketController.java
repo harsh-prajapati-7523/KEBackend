@@ -80,6 +80,51 @@ public class TicketController {
         return list;
     }
 
+    @GetMapping("/query")
+    public List<TicketResponse> queryTickets(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String warrantyStatus,
+            @RequestParam(required = false) String manufacturerStatus,
+            @RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo,
+            @RequestParam(required = false) String mine,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        boolean hasSearch = search != null && search.trim().length() >= 2 && search.trim().length() <= 120;
+        boolean mineRequested = "true".equalsIgnoreCase(mine == null ? "" : mine.trim());
+        int activeFilterCount = countActiveFilters(
+                hasSearch,
+                mineRequested,
+                status,
+                category,
+                warrantyStatus,
+                manufacturerStatus,
+                createdFrom,
+                createdTo
+        );
+        log.info("event=ticket_query_requested employeeId={} activeFilterCount={} hasSearch={} mine={}",
+                employeeId, activeFilterCount, hasSearch, mineRequested);
+
+        List<TicketResponse> list = service.queryTickets(
+                search,
+                status,
+                category,
+                warrantyStatus,
+                manufacturerStatus,
+                createdFrom,
+                createdTo,
+                mine,
+                employeeId
+        );
+
+        log.info("event=ticket_query_returned employeeId={} activeFilterCount={} hasSearch={} mine={} resultCount={}",
+                employeeId, activeFilterCount, hasSearch, mineRequested, list.size());
+        return list;
+    }
+
     @PostMapping("/{id}/pick")
     public TicketResponse pickTicket(
             @PathVariable Long id,
@@ -151,5 +196,15 @@ public class TicketController {
                 .map(authority -> authority.substring("ROLE_".length()))
                 .findFirst()
                 .orElse("");
+    }
+
+    private int countActiveFilters(boolean hasSearch, boolean mine, String... filters) {
+        int count = (hasSearch ? 1 : 0) + (mine ? 1 : 0);
+        for (String filter : filters) {
+            if (filter != null && !filter.isBlank()) {
+                count++;
+            }
+        }
+        return count;
     }
 }

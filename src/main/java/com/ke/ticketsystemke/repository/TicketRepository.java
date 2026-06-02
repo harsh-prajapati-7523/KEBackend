@@ -2,13 +2,14 @@ package com.ke.ticketsystemke.repository;
 
 import com.ke.ticketsystemke.entity.Ticket;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
 public interface TicketRepository
-        extends JpaRepository<Ticket, Long> {
+        extends JpaRepository<Ticket, Long>, JpaSpecificationExecutor<Ticket> {
 
     @Query(value = "SELECT nextval('ticket_number_seq')", nativeQuery = true)
     Long getNextTicketNumberValue();

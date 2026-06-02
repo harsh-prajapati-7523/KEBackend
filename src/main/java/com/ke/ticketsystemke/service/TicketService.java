@@ -7,10 +7,13 @@ import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.Ticket;
+import com.ke.ticketsystemke.entity.TicketCategory;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WarrantyStatus;
 import com.ke.ticketsystemke.repository.TicketRepository;
+import com.ke.ticketsystemke.repository.TicketSpecifications;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,6 +24,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.Collections;
 import java.util.List;
 
@@ -28,6 +35,7 @@ import java.util.List;
 public class TicketService {
 
     private static final Logger log = LoggerFactory.getLogger(TicketService.class);
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
 
     private final TicketRepository repository;
     private final TicketChargeService ticketChargeService;
@@ -308,6 +316,52 @@ public class TicketService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<TicketResponse> queryTickets(
+            String search,
+            String status,
+            String category,
+            String warrantyStatus,
+            String manufacturerStatus,
+            String createdFrom,
+            String createdTo,
+            String mine,
+            String employeeId
+    ) {
+        String normalizedSearch = normalizeSearchQuery(search);
+        TicketStatus parsedStatus = parseEnum(TicketStatus.class, status, "status");
+        TicketCategory parsedCategory = parseEnum(TicketCategory.class, category, "category");
+        WarrantyStatus parsedWarrantyStatus = parseEnum(WarrantyStatus.class, warrantyStatus, "warrantyStatus");
+        ManufacturerStatus parsedManufacturerStatus = parseEnum(ManufacturerStatus.class, manufacturerStatus, "manufacturerStatus");
+        LocalDate parsedCreatedFrom = parseDate(createdFrom, "createdFrom");
+        LocalDate parsedCreatedTo = parseDate(createdTo, "createdTo");
+        boolean parsedMine = parseBoolean(mine, "mine");
+
+        if (parsedCreatedFrom != null && parsedCreatedTo != null && parsedCreatedFrom.isAfter(parsedCreatedTo)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "createdFrom must not be after createdTo");
+        }
+
+        Instant createdFromInclusive = atStartOfBusinessDay(parsedCreatedFrom);
+        Instant createdToExclusive = parsedCreatedTo == null ? null : atStartOfBusinessDay(nextDay(parsedCreatedTo));
+
+        return repository.findAll(
+                        TicketSpecifications.queryTickets(
+                                normalizedSearch == null ? null : escapeLikeWildcards(normalizedSearch),
+                                parsedStatus,
+                                parsedCategory,
+                                parsedWarrantyStatus,
+                                parsedManufacturerStatus,
+                                createdFromInclusive,
+                                createdToExclusive,
+                                parsedMine ? employeeId : null
+                        ),
+                        Sort.by(Sort.Direction.DESC, "createdAt")
+                )
+                .stream()
+                .map(ticket -> TicketResponse.from(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
+                .toList();
+    }
+
     private String normalizeSearchQuery(String query) {
         if (query == null) {
             return null;
@@ -326,6 +380,53 @@ public class TicketService {
                 .replace("\\", "\\\\")
                 .replace("%", "\\%")
                 .replace("_", "\\_");
+    }
+
+    private <E extends Enum<E>> E parseEnum(Class<E> enumType, String value, String parameterName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        try {
+            return Enum.valueOf(enumType, value.trim());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid " + parameterName);
+        }
+    }
+
+    private LocalDate parseDate(String value, String parameterName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (DateTimeParseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid " + parameterName);
+        }
+    }
+
+    private boolean parseBoolean(String value, String parameterName) {
+        if (value == null || value.isBlank() || "false".equalsIgnoreCase(value.trim())) {
+            return false;
+        }
+        if ("true".equalsIgnoreCase(value.trim())) {
+            return true;
+        }
+
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid " + parameterName);
+    }
+
+    private Instant atStartOfBusinessDay(LocalDate date) {
+        return date == null ? null : date.atStartOfDay(BUSINESS_ZONE).toInstant();
+    }
+
+    private LocalDate nextDay(LocalDate date) {
+        try {
+            return date.plusDays(1);
+        } catch (DateTimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid createdTo");
+        }
     }
 
     private String formatTicketNumber(Long sequenceValue) {
