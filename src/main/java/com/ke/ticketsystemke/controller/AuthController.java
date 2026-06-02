@@ -62,7 +62,8 @@ public class AuthController {
                 new LoginResponse(
                         token,
                         employee.getName(),
-                        employee.getRole()
+                        employee.getRole(),
+                        employee.getEmployeeId()
                 )
         );
     }
