@@ -43,6 +43,7 @@ public class AuthController {
                 .orElse(null);
 
         if (employee == null ||
+                !employee.isActive() ||
                 request.getPassword() == null ||
                 !passwordEncoder.matches(
                         request.getPassword(),
@@ -62,7 +63,7 @@ public class AuthController {
                 new LoginResponse(
                         token,
                         employee.getName(),
-                        employee.getRole(),
+                        employee.getRole().name(),
                         employee.getEmployeeId()
                 )
         );

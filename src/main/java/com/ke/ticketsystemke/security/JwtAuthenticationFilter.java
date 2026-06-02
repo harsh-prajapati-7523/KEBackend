@@ -20,7 +20,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
@@ -69,10 +68,13 @@ public class JwtAuthenticationFilter
                     .findByEmployeeId(employeeId)
                     .orElseThrow();
 
+            if (!employee.isActive()) {
+                throw new IllegalStateException("Inactive employee");
+            }
+
             String role = employee
                     .getRole()
-                    .trim()
-                    .toUpperCase(Locale.ROOT);
+                    .name();
 
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(

@@ -4,10 +4,10 @@ import com.ke.ticketsystemke.dto.ErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -38,6 +38,14 @@ public class GlobalExceptionHandler {
 
         log.warn("event=validation_failure fields={} correlationId={}", fields, cid);
         ErrorResponse body = new ErrorResponse("Validation failed", cid);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableRequest(HttpMessageNotReadableException ex) {
+        String cid = MDC.get("correlationId");
+        log.warn("event=request_body_invalid correlationId={}", cid);
+        ErrorResponse body = new ErrorResponse("Invalid request body", cid);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 

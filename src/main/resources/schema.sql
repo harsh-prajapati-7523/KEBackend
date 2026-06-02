@@ -1,4 +1,10 @@
 --Initial User Creation
+ALTER TABLE employees
+    ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE employees
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT now();
+
 INSERT INTO employees (name, employee_Id, password, role)
 VALUES (
     'Harsh Prajapati(SUPER_ADMIN)',

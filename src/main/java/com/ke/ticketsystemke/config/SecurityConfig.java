@@ -2,6 +2,8 @@ package com.ke.ticketsystemke.config;
 
 import java.util.Arrays;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +24,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 @Configuration
 public class SecurityConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -44,12 +48,29 @@ public class SecurityConfig {
                         .configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, exception) -> {
+                            logEmployeeManagementDenied(request.getRequestURI(), null);
+                            response.sendError(401);
+                        })
+                        .accessDeniedHandler((request, response, exception) -> {
+                            String actorEmployeeId = request.getUserPrincipal() == null
+                                    ? null
+                                    : request.getUserPrincipal().getName();
+                            logEmployeeManagementDenied(request.getRequestURI(), actorEmployeeId);
+                            response.sendError(403);
+                        }))
 
                 .authorizeHttpRequests(auth -> auth
 
                         .requestMatchers(
                                 "/volt/auth/**")
                         .permitAll()
+
+                        .requestMatchers(
+                                "/volt/employees",
+                                "/volt/employees/**")
+                        .hasRole("SUPER_ADMIN")
 
                         .requestMatchers(
                                 HttpMethod.GET,
@@ -174,5 +195,12 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", configuration);
 
         return source;
+    }
+
+    private void logEmployeeManagementDenied(String endpoint, String actorEmployeeId) {
+        if (endpoint.startsWith("/volt/employees")) {
+            log.warn("event=employee_management_denied actorEmployeeId={} endpoint={} httpStatus={}",
+                    actorEmployeeId, endpoint, actorEmployeeId == null ? 401 : 403);
+        }
     }
 }
