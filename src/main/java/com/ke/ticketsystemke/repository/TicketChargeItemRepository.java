@@ -18,4 +18,17 @@ public interface TicketChargeItemRepository extends JpaRepository<TicketChargeIt
 
     @Query("SELECT COALESCE(SUM(item.amount), 0) FROM TicketChargeItem item WHERE item.ticket = :ticket AND item.deletedAt IS NULL")
     BigDecimal sumAmountByTicket(@Param("ticket") Ticket ticket);
+
+    @Query(value = """
+            SELECT MIN(BTRIM(description))
+            FROM ticket_charge_items
+            WHERE deleted_at IS NULL
+              AND description IS NOT NULL
+              AND BTRIM(description) <> ''
+              AND LOWER(BTRIM(description)) LIKE LOWER(:query) || '%' ESCAPE '\\'
+            GROUP BY LOWER(BTRIM(description))
+            ORDER BY COUNT(*) DESC, LOWER(MIN(BTRIM(description))) ASC, MIN(BTRIM(description)) ASC
+            LIMIT 5
+            """, nativeQuery = true)
+    List<String> findDescriptionSuggestions(@Param("query") String query);
 }

@@ -52,6 +52,11 @@ public class SecurityConfig {
                         .permitAll()
 
                         .requestMatchers(
+                                HttpMethod.GET,
+                                "/volt/suggestions/**")
+                        .authenticated()
+
+                        .requestMatchers(
                                 HttpMethod.POST,
                                 "/volt/tickets")
                         .hasAnyRole(
