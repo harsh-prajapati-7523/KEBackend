@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -60,6 +61,22 @@ public class TicketController {
         log.info("event=ticket_list_requested");
         List<TicketResponse> list = service.listTickets();
         log.info("event=ticket_list_returned count={}", list.size());
+        return list;
+    }
+
+    @GetMapping("/search")
+    public List<TicketResponse> searchTickets(
+            @RequestParam(required = false) String query,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        int queryLength = query == null ? 0 : query.length();
+        log.info("event=ticket_search_requested employeeId={} queryLength={}", employeeId, queryLength);
+
+        List<TicketResponse> list = service.searchTickets(query);
+
+        log.info("event=ticket_search_returned employeeId={} queryLength={} resultCount={}",
+                employeeId, queryLength, list.size());
         return list;
     }
 

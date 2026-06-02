@@ -96,6 +96,11 @@ public class SecurityConfig {
                         .authenticated()
 
                         .requestMatchers(
+                                HttpMethod.GET,
+                                "/volt/tickets/search")
+                        .authenticated()
+
+                        .requestMatchers(
                                 HttpMethod.POST,
                                 "/volt/tickets/*/charges")
                         .hasAnyRole(

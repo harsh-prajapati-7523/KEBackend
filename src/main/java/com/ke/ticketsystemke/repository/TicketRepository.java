@@ -16,6 +16,20 @@ public interface TicketRepository
     List<Ticket> findAllByOrderByCreatedAtDesc();
 
     @Query(value = """
+            SELECT *
+            FROM tickets
+            WHERE LOWER(ticket_number) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
+               OR LOWER(mobile_number) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
+               OR LOWER(customer_name) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
+               OR LOWER(product_type) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
+               OR LOWER(village_or_area) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
+               OR LOWER(manufacturer_or_brand_name) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
+               OR LOWER(product_serial_number) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
+            ORDER BY created_at DESC
+            """, nativeQuery = true)
+    List<Ticket> searchTickets(@Param("query") String query);
+
+    @Query(value = """
             SELECT MIN(BTRIM(product_type))
             FROM tickets
             WHERE product_type IS NOT NULL

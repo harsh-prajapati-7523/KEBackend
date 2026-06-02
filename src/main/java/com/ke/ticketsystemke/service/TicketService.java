@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -292,6 +293,39 @@ public class TicketService {
             .toList();
         log.info("event=ticket_list_returned count={}", list.size());
         return list;
+    }
+
+    @Transactional(readOnly = true)
+    public List<TicketResponse> searchTickets(String query) {
+        String normalizedQuery = normalizeSearchQuery(query);
+        if (normalizedQuery == null) {
+            return Collections.emptyList();
+        }
+
+        return repository.searchTickets(escapeLikeWildcards(normalizedQuery))
+                .stream()
+                .map(ticket -> TicketResponse.from(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
+                .toList();
+    }
+
+    private String normalizeSearchQuery(String query) {
+        if (query == null) {
+            return null;
+        }
+
+        String trimmedQuery = query.trim();
+        if (trimmedQuery.length() < 2 || trimmedQuery.length() > 120) {
+            return null;
+        }
+
+        return trimmedQuery;
+    }
+
+    private String escapeLikeWildcards(String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     private String formatTicketNumber(Long sequenceValue) {
