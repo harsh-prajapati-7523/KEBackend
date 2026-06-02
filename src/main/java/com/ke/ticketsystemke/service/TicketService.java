@@ -3,6 +3,8 @@ package com.ke.ticketsystemke.service;
 import com.ke.ticketsystemke.dto.CancelTicketRequest;
 import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
+import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
+import com.ke.ticketsystemke.dto.CustomerHistoryTicketResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.entity.ManufacturerStatus;
@@ -301,6 +303,28 @@ public class TicketService {
             .toList();
         log.info("event=ticket_list_returned count={}", list.size());
         return list;
+    }
+
+    @Transactional(readOnly = true)
+    public CustomerHistoryResponse getCustomerHistory(Long ticketId, String employeeId) {
+        Ticket ticket = repository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"
+                ));
+
+        List<CustomerHistoryTicketResponse> tickets = repository
+                .findTop10ByMobileNumberAndIdNotOrderByCreatedAtDesc(ticket.getMobileNumber(), ticketId)
+                .stream()
+                .map(historyTicket -> CustomerHistoryTicketResponse.from(
+                        historyTicket,
+                        ticketChargeService.calculateTotalCharge(historyTicket.getId())
+                ))
+                .toList();
+
+        log.info("event=customer_history_returned employeeId={} ticketId={} resultCount={}",
+                employeeId, ticketId, tickets.size());
+        return new CustomerHistoryResponse(tickets.size(), tickets);
     }
 
     @Transactional(readOnly = true)

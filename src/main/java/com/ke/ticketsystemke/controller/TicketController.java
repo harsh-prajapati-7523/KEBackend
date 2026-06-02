@@ -3,6 +3,7 @@ package com.ke.ticketsystemke.controller;
 import com.ke.ticketsystemke.dto.CancelTicketRequest;
 import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
+import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.service.TicketService;
@@ -62,6 +63,16 @@ public class TicketController {
         List<TicketResponse> list = service.listTickets();
         log.info("event=ticket_list_returned count={}", list.size());
         return list;
+    }
+
+    @GetMapping("/{id}/customer-history")
+    public CustomerHistoryResponse getCustomerHistory(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        log.info("event=customer_history_requested employeeId={} ticketId={}", employeeId, id);
+        return service.getCustomerHistory(id, employeeId);
     }
 
     @GetMapping("/search")

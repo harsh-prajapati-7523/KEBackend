@@ -83,3 +83,5 @@ CREATE TABLE IF NOT EXISTS ticket_charge_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ticket_charge_items_ticket_id ON ticket_charge_items(ticket_id);
+
+CREATE INDEX IF NOT EXISTS idx_tickets_mobile_number ON tickets(mobile_number);

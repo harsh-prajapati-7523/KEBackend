@@ -16,6 +16,8 @@ public interface TicketRepository
 
     List<Ticket> findAllByOrderByCreatedAtDesc();
 
+    List<Ticket> findTop10ByMobileNumberAndIdNotOrderByCreatedAtDesc(String mobileNumber, Long id);
+
     @Query(value = """
             SELECT *
             FROM tickets
