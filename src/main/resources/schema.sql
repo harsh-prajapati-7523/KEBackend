@@ -15,12 +15,32 @@ CREATE TABLE IF NOT EXISTS roles (
     updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
-INSERT INTO roles (role_key, display_name, active, system_role)
+ALTER TABLE roles
+    ALTER COLUMN active SET DEFAULT TRUE;
+
+ALTER TABLE roles
+    ALTER COLUMN system_role SET DEFAULT FALSE;
+
+ALTER TABLE roles
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE roles
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+UPDATE roles
+SET created_at = now()
+WHERE created_at IS NULL;
+
+UPDATE roles
+SET updated_at = now()
+WHERE updated_at IS NULL;
+
+INSERT INTO roles (role_key, display_name, active, system_role, created_at, updated_at)
 VALUES
-    ('SUPER_ADMIN', 'Super Admin', TRUE, TRUE),
-    ('ADMIN', 'Admin', TRUE, TRUE),
-    ('EMPLOYEE', 'Employee', TRUE, TRUE),
-    ('TECHNICIAN', 'Technician', TRUE, TRUE)
+    ('SUPER_ADMIN', 'Super Admin', TRUE, TRUE, now(), now()),
+    ('ADMIN', 'Admin', TRUE, TRUE, now(), now()),
+    ('EMPLOYEE', 'Employee', TRUE, TRUE, now(), now()),
+    ('TECHNICIAN', 'Technician', TRUE, TRUE, now(), now())
 ON CONFLICT (role_key) DO UPDATE
 SET
     display_name = EXCLUDED.display_name,
