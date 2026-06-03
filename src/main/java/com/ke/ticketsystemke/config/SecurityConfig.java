@@ -68,41 +68,44 @@ public class SecurityConfig {
                         .permitAll()
 
                         .requestMatchers(
+                                "/volt/role-access",
+                                "/volt/role-access/**")
+                        .hasRole("SUPER_ADMIN")
+
+                        .requestMatchers(
                                 "/volt/employees",
                                 "/volt/employees/**")
-                        .hasRole("SUPER_ADMIN")
+                        .authenticated()
 
                         .requestMatchers(
                                 "/volt/roles",
                                 "/volt/roles/**")
-                        .hasRole("SUPER_ADMIN")
+                        .authenticated()
 
                         .requestMatchers(
                                 "/volt/dropdown-sources",
                                 "/volt/dropdown-sources/**")
-                        .hasRole("SUPER_ADMIN")
+                        .authenticated()
 
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/volt/ticket-categories/*/form-fields")
-                        .hasAnyRole(
-                                "SUPER_ADMIN",
-                                "ADMIN")
+                        .authenticated()
 
                         .requestMatchers(
                                 "/volt/ticket-categories",
                                 "/volt/ticket-categories/**")
-                        .hasRole("SUPER_ADMIN")
+                        .authenticated()
 
                         .requestMatchers(
                                 "/volt/ticket-categories/*/field-configs",
                                 "/volt/ticket-categories/*/field-configs/**")
-                        .hasRole("SUPER_ADMIN")
+                        .authenticated()
 
                         .requestMatchers(
                                 "/volt/ticket-fields",
                                 "/volt/ticket-fields/**")
-                        .hasRole("SUPER_ADMIN")
+                        .authenticated()
 
                         .requestMatchers(
                                 HttpMethod.GET,
@@ -112,36 +115,24 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/volt/tickets")
-                        .hasAnyRole(
-                                "SUPER_ADMIN",
-                                "ADMIN")
+                        .authenticated()
 
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/volt/tickets/*/pick",
                                 "/volt/tickets/*/start-work",
                                 "/volt/tickets/*/complete")
-                        .hasAnyRole(
-                                "SUPER_ADMIN",
-                                "ADMIN",
-                                "EMPLOYEE",
-                                "TECHNICIAN")
+                        .authenticated()
 
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/volt/tickets/*/cancel")
-                        .hasAnyRole(
-                                "SUPER_ADMIN",
-                                "ADMIN")
+                        .authenticated()
 
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/volt/tickets/*/warranty")
-                        .hasAnyRole(
-                                "SUPER_ADMIN",
-                                "ADMIN",
-                                "EMPLOYEE",
-                                "TECHNICIAN")
+                        .authenticated()
 
                         .requestMatchers(
                                 HttpMethod.GET,
@@ -171,18 +162,12 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/volt/tickets/*/charges")
-                        .hasAnyRole(
-                                "SUPER_ADMIN",
-                                "ADMIN",
-                                "EMPLOYEE",
-                                "TECHNICIAN")
+                        .authenticated()
 
                         .requestMatchers(
                                 HttpMethod.DELETE,
                                 "/volt/tickets/*/charges/*")
-                        .hasAnyRole(
-                                "SUPER_ADMIN",
-                                "ADMIN")
+                        .authenticated()
 
                         .requestMatchers(
                                 HttpMethod.GET,

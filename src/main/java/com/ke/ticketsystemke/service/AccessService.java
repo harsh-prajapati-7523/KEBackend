@@ -1,0 +1,137 @@
+package com.ke.ticketsystemke.service;
+
+import com.ke.ticketsystemke.dto.CurrentAccessResponse;
+import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.entity.Employee;
+import com.ke.ticketsystemke.entity.Role;
+import com.ke.ticketsystemke.entity.RoleAccessRule;
+import com.ke.ticketsystemke.repository.EmployeeRepository;
+import com.ke.ticketsystemke.repository.RoleAccessRuleRepository;
+import com.ke.ticketsystemke.repository.RoleRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class AccessService {
+
+    private static final Logger log = LoggerFactory.getLogger(AccessService.class);
+    private static final String SUPER_ADMIN_ROLE_KEY = "SUPER_ADMIN";
+
+    private final EmployeeRepository employeeRepository;
+    private final RoleRepository roleRepository;
+    private final RoleAccessRuleRepository roleAccessRuleRepository;
+
+    public AccessService(
+            EmployeeRepository employeeRepository,
+            RoleRepository roleRepository,
+            RoleAccessRuleRepository roleAccessRuleRepository
+    ) {
+        this.employeeRepository = employeeRepository;
+        this.roleRepository = roleRepository;
+        this.roleAccessRuleRepository = roleAccessRuleRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isAllowed(String employeeId, AccessKey accessKey) {
+        try {
+            Employee employee = resolveActiveEmployee(employeeId);
+            Role role = resolveActiveRole(employee);
+            if (isSuperAdmin(role)) {
+                return true;
+            }
+            if (accessKey == AccessKey.VIEW_DASHBOARD) {
+                return true;
+            }
+            return roleAccessRuleRepository.findByRoleIdAndAccessKey(role.getId(), accessKey)
+                    .map(RoleAccessRule::isAllowed)
+                    .orElse(false);
+        } catch (RuntimeException ex) {
+            log.warn("event=access_check_failed employeeId={} accessKey={} decision=deny", employeeId, accessKey);
+            return false;
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public void requireAllowed(String employeeId, AccessKey accessKey) {
+        if (!isAllowed(employeeId, accessKey)) {
+            log.warn("event=access_denied employeeId={} accessKey={} decision=deny", employeeId, accessKey);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public void requireAnyAllowed(String employeeId, AccessKey... accessKeys) {
+        for (AccessKey accessKey : accessKeys) {
+            if (isAllowed(employeeId, accessKey)) {
+                return;
+            }
+        }
+        log.warn("event=access_denied employeeId={} accessKeys={} decision=deny", employeeId, Arrays.toString(accessKeys));
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+    }
+
+    @Transactional(readOnly = true)
+    public CurrentAccessResponse getCurrentAccess(String employeeId) {
+        Employee employee = resolveActiveEmployee(employeeId);
+        Role role = resolveActiveRole(employee);
+        boolean superAdmin = isSuperAdmin(role);
+        Map<AccessKey, Boolean> access = buildAccessMap(role, superAdmin);
+        return new CurrentAccessResponse(
+                role.getId(),
+                role.getRoleKey(),
+                role.getDisplayName(),
+                superAdmin,
+                access
+        );
+    }
+
+    Map<AccessKey, Boolean> buildAccessMap(Role role, boolean superAdmin) {
+        Map<AccessKey, Boolean> access = new EnumMap<>(AccessKey.class);
+        for (AccessKey accessKey : AccessKey.values()) {
+            access.put(accessKey, superAdmin || accessKey == AccessKey.VIEW_DASHBOARD);
+        }
+
+        if (!superAdmin) {
+            List<RoleAccessRule> rules = roleAccessRuleRepository.findAllByRoleId(role.getId());
+            for (RoleAccessRule rule : rules) {
+                if (rule.getAccessKey() != AccessKey.VIEW_DASHBOARD) {
+                    access.put(rule.getAccessKey(), rule.isAllowed());
+                }
+            }
+        }
+        return access;
+    }
+
+    Role resolveActiveRole(Employee employee) {
+        Role role = employee.getRoleRecord();
+        if (role == null && employee.getRole() != null) {
+            role = roleRepository.findByRoleKey(employee.getRole().name()).orElse(null);
+        }
+        if (role == null || !role.isActive()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Inactive role");
+        }
+        return role;
+    }
+
+    private Employee resolveActiveEmployee(String employeeId) {
+        Employee employee = employeeRepository.findByEmployeeId(employeeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
+        if (!employee.isActive()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Inactive employee");
+        }
+        return employee;
+    }
+
+    private boolean isSuperAdmin(Role role) {
+        return role != null && SUPER_ADMIN_ROLE_KEY.equals(role.getRoleKey());
+    }
+}

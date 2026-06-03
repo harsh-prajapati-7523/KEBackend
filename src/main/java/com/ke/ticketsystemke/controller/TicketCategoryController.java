@@ -4,6 +4,8 @@ import com.ke.ticketsystemke.dto.CreateTicketCategoryRequest;
 import com.ke.ticketsystemke.dto.TicketCategoryResponse;
 import com.ke.ticketsystemke.dto.TicketFormFieldsResponse;
 import com.ke.ticketsystemke.dto.UpdateTicketCategoryStatusRequest;
+import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.CategoryFieldConfigService;
 import com.ke.ticketsystemke.service.TicketCategoryService;
 import jakarta.validation.Valid;
@@ -26,22 +28,37 @@ public class TicketCategoryController {
 
     private final TicketCategoryService ticketCategoryService;
     private final CategoryFieldConfigService categoryFieldConfigService;
+    private final AccessService accessService;
 
     public TicketCategoryController(
             TicketCategoryService ticketCategoryService,
-            CategoryFieldConfigService categoryFieldConfigService
+            CategoryFieldConfigService categoryFieldConfigService,
+            AccessService accessService
     ) {
         this.ticketCategoryService = ticketCategoryService;
         this.categoryFieldConfigService = categoryFieldConfigService;
+        this.accessService = accessService;
     }
 
     @GetMapping
-    public List<TicketCategoryResponse> listCategories() {
+    public List<TicketCategoryResponse> listCategories(Authentication authentication) {
+        accessService.requireAnyAllowed(
+                authentication.getName(),
+                AccessKey.CREATE_TICKET,
+                AccessKey.VIEW_TICKET_CATEGORY_MANAGEMENT,
+                AccessKey.MANAGE_TICKET_CATEGORIES
+        );
         return ticketCategoryService.listCategories();
     }
 
     @GetMapping("/{id}/form-fields")
-    public TicketFormFieldsResponse getFormFields(@PathVariable Long id) {
+    public TicketFormFieldsResponse getFormFields(@PathVariable Long id, Authentication authentication) {
+        accessService.requireAnyAllowed(
+                authentication.getName(),
+                AccessKey.CREATE_TICKET,
+                AccessKey.VIEW_CATEGORY_FIELD_CONFIGURATION,
+                AccessKey.MANAGE_CATEGORY_FIELD_CONFIGS
+        );
         return categoryFieldConfigService.getFormFields(id);
     }
 
@@ -50,6 +67,7 @@ public class TicketCategoryController {
             @Valid @RequestBody CreateTicketCategoryRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_TICKET_CATEGORIES);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ticketCategoryService.createCategory(request, authentication.getName()));
     }
@@ -60,6 +78,7 @@ public class TicketCategoryController {
             @Valid @RequestBody UpdateTicketCategoryStatusRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_TICKET_CATEGORIES);
         return ticketCategoryService.updateStatus(id, request.getActive(), authentication.getName());
     }
 }

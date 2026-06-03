@@ -3,6 +3,8 @@ package com.ke.ticketsystemke.controller;
 import com.ke.ticketsystemke.dto.CreateRoleRequest;
 import com.ke.ticketsystemke.dto.RoleResponse;
 import com.ke.ticketsystemke.dto.UpdateRoleStatusRequest;
+import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.RoleService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -23,13 +25,20 @@ import java.util.List;
 public class RoleController {
 
     private final RoleService roleService;
+    private final AccessService accessService;
 
-    public RoleController(RoleService roleService) {
+    public RoleController(RoleService roleService, AccessService accessService) {
         this.roleService = roleService;
+        this.accessService = accessService;
     }
 
     @GetMapping
-    public List<RoleResponse> listRoles() {
+    public List<RoleResponse> listRoles(Authentication authentication) {
+        accessService.requireAnyAllowed(
+                authentication.getName(),
+                AccessKey.VIEW_ROLE_MANAGEMENT,
+                AccessKey.MANAGE_ROLES
+        );
         return roleService.listRoles();
     }
 
@@ -38,6 +47,7 @@ public class RoleController {
             @Valid @RequestBody CreateRoleRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_ROLES);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(roleService.createRole(request, authentication.getName()));
     }
@@ -48,6 +58,7 @@ public class RoleController {
             @Valid @RequestBody UpdateRoleStatusRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_ROLES);
         return roleService.updateStatus(id, request.getActive(), authentication.getName());
     }
 }

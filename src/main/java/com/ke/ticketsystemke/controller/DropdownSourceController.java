@@ -6,6 +6,8 @@ import com.ke.ticketsystemke.dto.DropdownOptionResponse;
 import com.ke.ticketsystemke.dto.DropdownSourceResponse;
 import com.ke.ticketsystemke.dto.UpdateDropdownOptionStatusRequest;
 import com.ke.ticketsystemke.dto.UpdateDropdownSourceStatusRequest;
+import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.DropdownSourceService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -26,13 +28,20 @@ import java.util.List;
 public class DropdownSourceController {
 
     private final DropdownSourceService dropdownSourceService;
+    private final AccessService accessService;
 
-    public DropdownSourceController(DropdownSourceService dropdownSourceService) {
+    public DropdownSourceController(DropdownSourceService dropdownSourceService, AccessService accessService) {
         this.dropdownSourceService = dropdownSourceService;
+        this.accessService = accessService;
     }
 
     @GetMapping
-    public List<DropdownSourceResponse> listSources() {
+    public List<DropdownSourceResponse> listSources(Authentication authentication) {
+        accessService.requireAnyAllowed(
+                authentication.getName(),
+                AccessKey.VIEW_DROPDOWN_SOURCE_MANAGEMENT,
+                AccessKey.MANAGE_DROPDOWN_SOURCES
+        );
         return dropdownSourceService.listSources();
     }
 
@@ -41,6 +50,7 @@ public class DropdownSourceController {
             @Valid @RequestBody CreateDropdownSourceRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_DROPDOWN_SOURCES);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(dropdownSourceService.createSource(request, authentication.getName()));
     }
@@ -51,11 +61,17 @@ public class DropdownSourceController {
             @Valid @RequestBody UpdateDropdownSourceStatusRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_DROPDOWN_SOURCES);
         return dropdownSourceService.updateSourceStatus(id, request.getActive(), authentication.getName());
     }
 
     @GetMapping("/{sourceId}/options")
-    public List<DropdownOptionResponse> listOptions(@PathVariable Long sourceId) {
+    public List<DropdownOptionResponse> listOptions(@PathVariable Long sourceId, Authentication authentication) {
+        accessService.requireAnyAllowed(
+                authentication.getName(),
+                AccessKey.VIEW_DROPDOWN_SOURCE_MANAGEMENT,
+                AccessKey.MANAGE_DROPDOWN_SOURCES
+        );
         return dropdownSourceService.listOptions(sourceId);
     }
 
@@ -65,6 +81,7 @@ public class DropdownSourceController {
             @Valid @RequestBody CreateDropdownOptionRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_DROPDOWN_SOURCES);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(dropdownSourceService.createOption(sourceId, request, authentication.getName()));
     }
@@ -76,6 +93,7 @@ public class DropdownSourceController {
             @Valid @RequestBody UpdateDropdownOptionStatusRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_DROPDOWN_SOURCES);
         return dropdownSourceService.updateOptionStatus(sourceId, optionId, request.getActive(), authentication.getName());
     }
 }

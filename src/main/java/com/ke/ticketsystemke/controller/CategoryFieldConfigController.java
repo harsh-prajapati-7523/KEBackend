@@ -4,6 +4,8 @@ import com.ke.ticketsystemke.dto.AddCategoryFieldConfigRequest;
 import com.ke.ticketsystemke.dto.CategoryFieldConfigResponse;
 import com.ke.ticketsystemke.dto.UpdateCategoryFieldConfigRequest;
 import com.ke.ticketsystemke.dto.UpdateCategoryFieldConfigStatusRequest;
+import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.CategoryFieldConfigService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -24,13 +26,20 @@ import java.util.List;
 public class CategoryFieldConfigController {
 
     private final CategoryFieldConfigService categoryFieldConfigService;
+    private final AccessService accessService;
 
-    public CategoryFieldConfigController(CategoryFieldConfigService categoryFieldConfigService) {
+    public CategoryFieldConfigController(CategoryFieldConfigService categoryFieldConfigService, AccessService accessService) {
         this.categoryFieldConfigService = categoryFieldConfigService;
+        this.accessService = accessService;
     }
 
     @GetMapping
-    public List<CategoryFieldConfigResponse> listConfigs(@PathVariable Long categoryId) {
+    public List<CategoryFieldConfigResponse> listConfigs(@PathVariable Long categoryId, Authentication authentication) {
+        accessService.requireAnyAllowed(
+                authentication.getName(),
+                AccessKey.VIEW_CATEGORY_FIELD_CONFIGURATION,
+                AccessKey.MANAGE_CATEGORY_FIELD_CONFIGS
+        );
         return categoryFieldConfigService.listConfigs(categoryId);
     }
 
@@ -40,6 +49,7 @@ public class CategoryFieldConfigController {
             @Valid @RequestBody AddCategoryFieldConfigRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_CATEGORY_FIELD_CONFIGS);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(categoryFieldConfigService.addConfig(categoryId, request, authentication.getName()));
     }
@@ -51,6 +61,7 @@ public class CategoryFieldConfigController {
             @RequestBody UpdateCategoryFieldConfigRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_CATEGORY_FIELD_CONFIGS);
         return categoryFieldConfigService.updateConfig(categoryId, configId, request, authentication.getName());
     }
 
@@ -61,6 +72,7 @@ public class CategoryFieldConfigController {
             @Valid @RequestBody UpdateCategoryFieldConfigStatusRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_CATEGORY_FIELD_CONFIGS);
         return categoryFieldConfigService.updateStatus(categoryId, configId, request.getVisible(), authentication.getName());
     }
 }

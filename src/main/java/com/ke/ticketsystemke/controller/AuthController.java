@@ -4,6 +4,7 @@ import com.ke.ticketsystemke.dto.LoginRequest;
 import com.ke.ticketsystemke.dto.LoginResponse;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
+import com.ke.ticketsystemke.repository.RoleRepository;
 import com.ke.ticketsystemke.security.JwtService;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,9 @@ public class AuthController {
     private EmployeeRepository employeeRepository;
 
     @Autowired
+    private RoleRepository roleRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -44,6 +48,7 @@ public class AuthController {
 
         if (employee == null ||
                 !employee.isActive() ||
+                hasInactiveRole(employee) ||
                 request.getPassword() == null ||
                 !passwordEncoder.matches(
                         request.getPassword(),
@@ -76,5 +81,17 @@ public class AuthController {
             return employee.getRoleRecord().getRoleKey();
         }
         return employee.getRole() == null ? null : employee.getRole().name();
+    }
+
+    private boolean hasInactiveRole(Employee employee) {
+        if (employee.getRoleRecord() != null) {
+            return !employee.getRoleRecord().isActive();
+        }
+        if (employee.getRole() != null) {
+            return roleRepository.findByRoleKey(employee.getRole().name())
+                    .map(role -> !role.isActive())
+                    .orElse(true);
+        }
+        return true;
     }
 }

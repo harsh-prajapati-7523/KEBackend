@@ -5,6 +5,8 @@ import com.ke.ticketsystemke.dto.EmployeeResponse;
 import com.ke.ticketsystemke.dto.ResetEmployeePasswordRequest;
 import com.ke.ticketsystemke.dto.UpdateEmployeeRoleRequest;
 import com.ke.ticketsystemke.dto.UpdateEmployeeStatusRequest;
+import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.EmployeeService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -25,13 +27,20 @@ import java.util.List;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
+    private final AccessService accessService;
 
-    public EmployeeController(EmployeeService employeeService) {
+    public EmployeeController(EmployeeService employeeService, AccessService accessService) {
         this.employeeService = employeeService;
+        this.accessService = accessService;
     }
 
     @GetMapping
-    public List<EmployeeResponse> listEmployees() {
+    public List<EmployeeResponse> listEmployees(Authentication authentication) {
+        accessService.requireAnyAllowed(
+                authentication.getName(),
+                AccessKey.VIEW_EMPLOYEE_MANAGEMENT,
+                AccessKey.MANAGE_EMPLOYEES
+        );
         return employeeService.listEmployees();
     }
 
@@ -40,6 +49,7 @@ public class EmployeeController {
             @Valid @RequestBody CreateEmployeeRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_EMPLOYEES);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(employeeService.createEmployee(request, authentication.getName()));
     }
@@ -50,6 +60,7 @@ public class EmployeeController {
             @Valid @RequestBody UpdateEmployeeStatusRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_EMPLOYEES);
         return employeeService.updateStatus(id, request.getActive(), authentication.getName());
     }
 
@@ -59,6 +70,7 @@ public class EmployeeController {
             @Valid @RequestBody UpdateEmployeeRoleRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_EMPLOYEES);
         return employeeService.updateRole(id, request.getRoleId(), request.getRole(), authentication.getName());
     }
 
@@ -68,6 +80,7 @@ public class EmployeeController {
             @Valid @RequestBody ResetEmployeePasswordRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_EMPLOYEES);
         return employeeService.resetPassword(id, request.getPassword(), authentication.getName());
     }
 }

@@ -81,6 +81,114 @@ ALTER TABLE employees
 ALTER TABLE employees
     VALIDATE CONSTRAINT ck_employees_role_backfilled;
 
+CREATE TABLE IF NOT EXISTS role_access_rules (
+    id BIGSERIAL PRIMARY KEY,
+    role_id BIGINT NOT NULL,
+    access_key VARCHAR(60) NOT NULL,
+    allowed BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_by_employee_id BIGINT,
+    CONSTRAINT fk_role_access_rules_role FOREIGN KEY (role_id)
+        REFERENCES roles(id),
+    CONSTRAINT fk_role_access_rules_updated_by_employee FOREIGN KEY (updated_by_employee_id)
+        REFERENCES employees(id),
+    CONSTRAINT uk_role_access_rules_role_access_key UNIQUE (role_id, access_key)
+);
+
+ALTER TABLE role_access_rules
+    ALTER COLUMN allowed SET DEFAULT FALSE;
+
+ALTER TABLE role_access_rules
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE role_access_rules
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE role_access_rules
+    DROP CONSTRAINT IF EXISTS ck_role_access_rules_access_key;
+
+ALTER TABLE role_access_rules
+    ADD CONSTRAINT ck_role_access_rules_access_key
+    CHECK (access_key IN (
+        'VIEW_DASHBOARD',
+        'VIEW_TICKETS',
+        'CREATE_TICKET',
+        'PICK_TICKET',
+        'START_WORK',
+        'COMPLETE_TICKET',
+        'CANCEL_TICKET',
+        'UPDATE_WARRANTY',
+        'VIEW_CUSTOMER_HISTORY',
+        'VIEW_CHARGES',
+        'ADD_CHARGE',
+        'DELETE_CHARGE',
+        'USE_TICKET_SEARCH',
+        'USE_TICKET_FILTERS',
+        'USE_SMART_SUGGESTIONS',
+        'VIEW_EMPLOYEE_MANAGEMENT',
+        'MANAGE_EMPLOYEES',
+        'VIEW_ROLE_MANAGEMENT',
+        'MANAGE_ROLES',
+        'VIEW_TICKET_CATEGORY_MANAGEMENT',
+        'MANAGE_TICKET_CATEGORIES',
+        'VIEW_TICKET_FIELD_MANAGEMENT',
+        'MANAGE_TICKET_FIELDS',
+        'VIEW_CATEGORY_FIELD_CONFIGURATION',
+        'MANAGE_CATEGORY_FIELD_CONFIGS',
+        'VIEW_DROPDOWN_SOURCE_MANAGEMENT',
+        'MANAGE_DROPDOWN_SOURCES'
+    ));
+
+CREATE INDEX IF NOT EXISTS idx_role_access_rules_role_id ON role_access_rules(role_id);
+
+CREATE INDEX IF NOT EXISTS idx_role_access_rules_access_key ON role_access_rules(access_key);
+
+INSERT INTO role_access_rules (role_id, access_key, allowed, created_at, updated_at)
+SELECT r.id, v.access_key, TRUE, now(), now()
+FROM roles r
+CROSS JOIN (
+    VALUES
+        ('VIEW_DASHBOARD'),
+        ('VIEW_TICKETS'),
+        ('CREATE_TICKET'),
+        ('PICK_TICKET'),
+        ('START_WORK'),
+        ('COMPLETE_TICKET'),
+        ('CANCEL_TICKET'),
+        ('UPDATE_WARRANTY'),
+        ('VIEW_CUSTOMER_HISTORY'),
+        ('VIEW_CHARGES'),
+        ('ADD_CHARGE'),
+        ('DELETE_CHARGE'),
+        ('USE_TICKET_SEARCH'),
+        ('USE_TICKET_FILTERS'),
+        ('USE_SMART_SUGGESTIONS')
+) AS v(access_key)
+WHERE r.role_key = 'ADMIN'
+ON CONFLICT (role_id, access_key) DO NOTHING;
+
+INSERT INTO role_access_rules (role_id, access_key, allowed, created_at, updated_at)
+SELECT r.id, v.access_key, TRUE, now(), now()
+FROM roles r
+CROSS JOIN (
+    VALUES
+        ('VIEW_DASHBOARD'),
+        ('VIEW_TICKETS'),
+        ('PICK_TICKET'),
+        ('START_WORK'),
+        ('COMPLETE_TICKET'),
+        ('UPDATE_WARRANTY'),
+        ('VIEW_CUSTOMER_HISTORY'),
+        ('VIEW_CHARGES'),
+        ('ADD_CHARGE'),
+        ('USE_TICKET_SEARCH'),
+        ('USE_TICKET_FILTERS'),
+        ('USE_SMART_SUGGESTIONS')
+) AS v(access_key)
+WHERE r.role_key IN ('EMPLOYEE', 'TECHNICIAN')
+ON CONFLICT (role_id, access_key) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS ticket_categories (
     id BIGSERIAL PRIMARY KEY,
     category_key VARCHAR(40) NOT NULL UNIQUE,

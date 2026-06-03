@@ -2,6 +2,7 @@ package com.ke.ticketsystemke.security;
 
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
+import com.ke.ticketsystemke.repository.RoleRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,6 +39,9 @@ public class JwtAuthenticationFilter
     @Autowired
     private EmployeeRepository employeeRepository;
 
+    @Autowired
+    private RoleRepository roleRepository;
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
@@ -70,6 +74,9 @@ public class JwtAuthenticationFilter
 
             if (!employee.isActive()) {
                 throw new IllegalStateException("Inactive employee");
+            }
+            if (hasInactiveRole(employee)) {
+                throw new IllegalStateException("Inactive role");
             }
 
             String role = resolveRoleKey(employee);
@@ -112,5 +119,17 @@ public class JwtAuthenticationFilter
             return employee.getRoleRecord().getRoleKey();
         }
         return employee.getRole() == null ? null : employee.getRole().name();
+    }
+
+    private boolean hasInactiveRole(Employee employee) {
+        if (employee.getRoleRecord() != null) {
+            return !employee.getRoleRecord().isActive();
+        }
+        if (employee.getRole() != null) {
+            return roleRepository.findByRoleKey(employee.getRole().name())
+                    .map(role -> !role.isActive())
+                    .orElse(true);
+        }
+        return true;
     }
 }

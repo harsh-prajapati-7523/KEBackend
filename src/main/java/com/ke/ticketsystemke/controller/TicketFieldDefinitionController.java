@@ -4,6 +4,8 @@ import com.ke.ticketsystemke.dto.CreateTicketFieldDefinitionRequest;
 import com.ke.ticketsystemke.dto.TicketFieldDefinitionResponse;
 import com.ke.ticketsystemke.dto.UpdateTicketFieldDefinitionStatusRequest;
 import com.ke.ticketsystemke.dto.UpdateTicketFieldDropdownSourceRequest;
+import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.TicketFieldDefinitionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -24,13 +26,20 @@ import java.util.List;
 public class TicketFieldDefinitionController {
 
     private final TicketFieldDefinitionService ticketFieldDefinitionService;
+    private final AccessService accessService;
 
-    public TicketFieldDefinitionController(TicketFieldDefinitionService ticketFieldDefinitionService) {
+    public TicketFieldDefinitionController(TicketFieldDefinitionService ticketFieldDefinitionService, AccessService accessService) {
         this.ticketFieldDefinitionService = ticketFieldDefinitionService;
+        this.accessService = accessService;
     }
 
     @GetMapping
-    public List<TicketFieldDefinitionResponse> listFieldDefinitions() {
+    public List<TicketFieldDefinitionResponse> listFieldDefinitions(Authentication authentication) {
+        accessService.requireAnyAllowed(
+                authentication.getName(),
+                AccessKey.VIEW_TICKET_FIELD_MANAGEMENT,
+                AccessKey.MANAGE_TICKET_FIELDS
+        );
         return ticketFieldDefinitionService.listFieldDefinitions();
     }
 
@@ -39,6 +48,7 @@ public class TicketFieldDefinitionController {
             @Valid @RequestBody CreateTicketFieldDefinitionRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_TICKET_FIELDS);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ticketFieldDefinitionService.createFieldDefinition(request, authentication.getName()));
     }
@@ -49,6 +59,7 @@ public class TicketFieldDefinitionController {
             @Valid @RequestBody UpdateTicketFieldDefinitionStatusRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_TICKET_FIELDS);
         return ticketFieldDefinitionService.updateStatus(id, request.getActive(), authentication.getName());
     }
 
@@ -58,6 +69,7 @@ public class TicketFieldDefinitionController {
             @RequestBody UpdateTicketFieldDropdownSourceRequest request,
             Authentication authentication
     ) {
+        accessService.requireAllowed(authentication.getName(), AccessKey.MANAGE_TICKET_FIELDS);
         return ticketFieldDefinitionService.updateDropdownSource(
                 id,
                 request.getDropdownSourceId(),

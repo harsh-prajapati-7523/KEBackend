@@ -7,6 +7,8 @@ import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValuesResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
+import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.TicketService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -33,9 +35,11 @@ public class TicketController {
     private static final Logger log = LoggerFactory.getLogger(TicketController.class);
 
     private final TicketService service;
+    private final AccessService accessService;
 
-    public TicketController(TicketService service) {
+    public TicketController(TicketService service, AccessService accessService) {
         this.service = service;
+        this.accessService = accessService;
     }
 
     @PostMapping
@@ -44,6 +48,7 @@ public class TicketController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.CREATE_TICKET);
         log.info("event=ticket_create_requested employeeId={}", employeeId);
 
         TicketResponse response = service.createTicket(
@@ -59,8 +64,10 @@ public class TicketController {
     }
 
     @GetMapping
-    public List<TicketResponse> listTickets() {
-        log.info("event=ticket_list_requested");
+    public List<TicketResponse> listTickets(Authentication authentication) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
+        log.info("event=ticket_list_requested employeeId={}", employeeId);
         List<TicketResponse> list = service.listTickets();
         log.info("event=ticket_list_returned count={}", list.size());
         return list;
@@ -72,6 +79,7 @@ public class TicketController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_CUSTOMER_HISTORY);
         log.info("event=customer_history_requested employeeId={} ticketId={}", employeeId, id);
         return service.getCustomerHistory(id, employeeId);
     }
@@ -82,6 +90,7 @@ public class TicketController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
         log.info("event=ticket_dynamic_values_requested employeeId={} ticketId={}", employeeId, id);
         return service.getDynamicValues(id, employeeId);
     }
@@ -92,6 +101,8 @@ public class TicketController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
+        accessService.requireAllowed(employeeId, AccessKey.USE_TICKET_SEARCH);
         int queryLength = query == null ? 0 : query.length();
         log.info("event=ticket_search_requested employeeId={} queryLength={}", employeeId, queryLength);
 
@@ -115,6 +126,8 @@ public class TicketController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
+        accessService.requireAllowed(employeeId, AccessKey.USE_TICKET_FILTERS);
         boolean hasSearch = search != null && search.trim().length() >= 2 && search.trim().length() <= 120;
         boolean mineRequested = "true".equalsIgnoreCase(mine == null ? "" : mine.trim());
         int activeFilterCount = countActiveFilters(
@@ -153,6 +166,7 @@ public class TicketController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.PICK_TICKET);
         log.info("event=ticket_pick_requested ticketId={} employeeId={}", id, employeeId);
         TicketResponse resp = service.pickTicket(id, employeeId);
         log.info("event=ticket_picked ticketId={} ticketNumber={} pickedBy={}", resp.id(), resp.ticketNumber(), employeeId);
@@ -165,6 +179,7 @@ public class TicketController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.START_WORK);
         log.info("event=ticket_start_requested ticketId={} employeeId={}", id, employeeId);
         TicketResponse resp = service.startWork(id, employeeId);
         log.info("event=ticket_started ticketId={} ticketNumber={} employeeId={}", resp.id(), resp.ticketNumber(), employeeId);
@@ -178,6 +193,7 @@ public class TicketController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.COMPLETE_TICKET);
         String role = extractRole(authentication);
         log.info("event=ticket_complete_requested ticketId={} employeeId={} role={}", id, employeeId, role);
         TicketResponse resp = service.completeTicket(id, request, employeeId, role);
@@ -192,6 +208,7 @@ public class TicketController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.CANCEL_TICKET);
         String role = extractRole(authentication);
         log.info("event=ticket_cancel_requested ticketId={} employeeId={} role={}", id, employeeId, role);
         TicketResponse resp = service.cancelTicket(id, request, employeeId, role);
@@ -206,6 +223,7 @@ public class TicketController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.UPDATE_WARRANTY);
         String role = extractRole(authentication);
         return service.updateWarranty(id, request, employeeId, role);
     }

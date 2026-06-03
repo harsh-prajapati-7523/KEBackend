@@ -1,5 +1,7 @@
 package com.ke.ticketsystemke.controller;
 
+import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.SuggestionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,9 +21,11 @@ public class SuggestionController {
     private static final Logger log = LoggerFactory.getLogger(SuggestionController.class);
 
     private final SuggestionService suggestionService;
+    private final AccessService accessService;
 
-    public SuggestionController(SuggestionService suggestionService) {
+    public SuggestionController(SuggestionService suggestionService, AccessService accessService) {
         this.suggestionService = suggestionService;
+        this.accessService = accessService;
     }
 
     @GetMapping("/product-types")
@@ -63,6 +67,7 @@ public class SuggestionController {
             Function<String, List<String>> suggestionFinder
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.USE_SMART_SUGGESTIONS);
         log.info("event=suggestion_requested suggestionType={} employeeId={}", suggestionType, employeeId);
 
         List<String> suggestions = suggestionFinder.apply(query);

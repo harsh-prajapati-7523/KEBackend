@@ -2,6 +2,8 @@ package com.ke.ticketsystemke.controller;
 
 import com.ke.ticketsystemke.dto.ChargeItemRequest;
 import com.ke.ticketsystemke.dto.ChargeListResponse;
+import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.TicketChargeService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -25,9 +27,11 @@ public class TicketChargeController {
     private static final Logger log = LoggerFactory.getLogger(TicketChargeController.class);
 
     private final TicketChargeService ticketChargeService;
+    private final AccessService accessService;
 
-    public TicketChargeController(TicketChargeService ticketChargeService) {
+    public TicketChargeController(TicketChargeService ticketChargeService, AccessService accessService) {
         this.ticketChargeService = ticketChargeService;
+        this.accessService = accessService;
     }
 
     @GetMapping("/{ticketId}/charges")
@@ -36,6 +40,7 @@ public class TicketChargeController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_CHARGES);
         log.info("event=charge_list_requested endpoint=GET /volt/tickets/{}/charges employeeId={}", ticketId, employeeId);
         return ticketChargeService.listCharges(ticketId, employeeId);
     }
@@ -47,6 +52,7 @@ public class TicketChargeController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.ADD_CHARGE);
         String role = extractRole(authentication);
         log.info("event=charge_add_requested endpoint=POST /volt/tickets/{}/charges employeeId={} role={}", ticketId, employeeId, role);
         ChargeListResponse response = ticketChargeService.addCharge(ticketId, request, employeeId, role);
@@ -60,6 +66,7 @@ public class TicketChargeController {
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.DELETE_CHARGE);
         String role = extractRole(authentication);
         log.info("event=charge_delete_requested endpoint=DELETE /volt/tickets/{}/charges/{} employeeId={} role={}", ticketId, chargeItemId, employeeId, role);
         ChargeListResponse response = ticketChargeService.deleteCharge(ticketId, chargeItemId, employeeId, role);
