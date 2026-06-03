@@ -73,6 +73,11 @@ public class SecurityConfig {
                         .hasRole("SUPER_ADMIN")
 
                         .requestMatchers(
+                                "/volt/roles",
+                                "/volt/roles/**")
+                        .hasRole("SUPER_ADMIN")
+
+                        .requestMatchers(
                                 HttpMethod.GET,
                                 "/volt/suggestions/**")
                         .authenticated()

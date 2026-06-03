@@ -5,6 +5,32 @@ ALTER TABLE employees
 ALTER TABLE employees
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT now();
 
+CREATE TABLE IF NOT EXISTS roles (
+    id BIGSERIAL PRIMARY KEY,
+    role_key VARCHAR(30) NOT NULL UNIQUE,
+    display_name VARCHAR(80) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    system_role BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+INSERT INTO roles (role_key, display_name, active, system_role)
+VALUES
+    ('SUPER_ADMIN', 'Super Admin', TRUE, TRUE),
+    ('ADMIN', 'Admin', TRUE, TRUE),
+    ('EMPLOYEE', 'Employee', TRUE, TRUE),
+    ('TECHNICIAN', 'Technician', TRUE, TRUE)
+ON CONFLICT (role_key) DO UPDATE
+SET
+    display_name = EXCLUDED.display_name,
+    active = CASE
+        WHEN roles.role_key = 'SUPER_ADMIN' THEN TRUE
+        ELSE roles.active
+    END,
+    system_role = TRUE,
+    updated_at = now();
+
 --Ticket Number Sequence Creation
 CREATE SEQUENCE IF NOT EXISTS ticket_number_seq
     START WITH 1

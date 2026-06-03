@@ -1,6 +1,7 @@
 package com.ke.ticketsystemke.exception;
 
 import com.ke.ticketsystemke.dto.ErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -29,22 +30,30 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         String cid = MDC.get("correlationId");
         String fields = ex.getBindingResult().getFieldErrors()
                 .stream()
                 .map(fe -> fe.getField() + ":" + fe.getDefaultMessage())
                 .collect(Collectors.joining(", "));
 
-        log.warn("event=validation_failure fields={} correlationId={}", fields, cid);
+        if (request.getRequestURI().startsWith("/volt/roles")) {
+            log.warn("event=role_invalid_request decision=validation_failed correlationId={}", cid);
+        } else {
+            log.warn("event=validation_failure fields={} correlationId={}", fields, cid);
+        }
         ErrorResponse body = new ErrorResponse("Validation failed", cid);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ErrorResponse> handleUnreadableRequest(HttpMessageNotReadableException ex) {
+    public ResponseEntity<ErrorResponse> handleUnreadableRequest(HttpMessageNotReadableException ex, HttpServletRequest request) {
         String cid = MDC.get("correlationId");
-        log.warn("event=request_body_invalid correlationId={}", cid);
+        if (request.getRequestURI().startsWith("/volt/roles")) {
+            log.warn("event=role_invalid_request decision=request_body_invalid correlationId={}", cid);
+        } else {
+            log.warn("event=request_body_invalid correlationId={}", cid);
+        }
         ErrorResponse body = new ErrorResponse("Invalid request body", cid);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
