@@ -21,8 +21,9 @@ public class CreateTicketRequest {
     @NotBlank
     private String productType;
 
-    @NotNull
     private TicketCategory category;
+
+    private Long categoryId;
 
     @NotBlank
     private String complaintDescription;
@@ -77,6 +78,14 @@ public class CreateTicketRequest {
 
     public void setCategory(TicketCategory category) {
         this.category = category;
+    }
+
+    public Long getCategoryId() {
+        return categoryId;
+    }
+
+    public void setCategoryId(Long categoryId) {
+        this.categoryId = categoryId;
     }
 
     public String getComplaintDescription() {

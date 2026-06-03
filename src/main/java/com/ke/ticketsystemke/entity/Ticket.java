@@ -29,8 +29,12 @@ public class Ticket {
     private String productType;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column
     private TicketCategory category;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "category_id")
+    private TicketCategoryConfig categoryRecord;
 
     @Column(nullable = false, length = 1000)
     private String complaintDescription;

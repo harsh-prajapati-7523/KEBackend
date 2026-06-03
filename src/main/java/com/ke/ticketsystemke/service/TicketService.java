@@ -10,8 +10,10 @@ import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketCategory;
+import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WarrantyStatus;
+import com.ke.ticketsystemke.repository.TicketCategoryRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.TicketSpecifications;
 import org.springframework.http.HttpStatus;
@@ -40,10 +42,12 @@ public class TicketService {
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
 
     private final TicketRepository repository;
+    private final TicketCategoryRepository ticketCategoryRepository;
     private final TicketChargeService ticketChargeService;
 
-    public TicketService(TicketRepository repository, TicketChargeService ticketChargeService) {
+    public TicketService(TicketRepository repository, TicketCategoryRepository ticketCategoryRepository, TicketChargeService ticketChargeService) {
         this.repository = repository;
+        this.ticketCategoryRepository = ticketCategoryRepository;
         this.ticketChargeService = ticketChargeService;
     }
 
@@ -61,7 +65,7 @@ public class TicketService {
         ticket.setMobileNumber(request.getMobileNumber());
         ticket.setVillageOrArea(trimToNull(request.getVillageOrArea()));
         ticket.setProductType(request.getProductType().trim());
-        ticket.setCategory(request.getCategory());
+        assignCategory(ticket, resolveAssignableCategory(request.getCategoryId(), request.getCategory()));
         ticket.setComplaintDescription(request.getComplaintDescription().trim());
         ticket.setStatus(TicketStatus.NEW);
         ticket.setCreatedByEmployeeId(createdByEmployeeId);
@@ -397,6 +401,39 @@ public class TicketService {
         }
 
         return trimmedQuery;
+    }
+
+    private TicketCategoryConfig resolveAssignableCategory(Long categoryId, TicketCategory legacyCategory) {
+        TicketCategoryConfig category = resolveCategory(categoryId, legacyCategory);
+        if (!category.isActive()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Inactive category cannot be assigned");
+        }
+        return category;
+    }
+
+    private TicketCategoryConfig resolveCategory(Long categoryId, TicketCategory legacyCategory) {
+        if (categoryId != null) {
+            return ticketCategoryRepository.findById(categoryId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category not found"));
+        }
+        if (legacyCategory != null) {
+            return ticketCategoryRepository.findByCategoryKey(legacyCategory.name())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category not found"));
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category is required");
+    }
+
+    private void assignCategory(Ticket ticket, TicketCategoryConfig category) {
+        ticket.setCategoryRecord(category);
+        ticket.setCategory(toBuiltInCategory(category.getCategoryKey()));
+    }
+
+    private TicketCategory toBuiltInCategory(String categoryKey) {
+        try {
+            return TicketCategory.valueOf(categoryKey);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     private String escapeLikeWildcards(String value) {

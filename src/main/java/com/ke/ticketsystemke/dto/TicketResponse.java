@@ -2,6 +2,7 @@ package com.ke.ticketsystemke.dto;
 
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketCategory;
+import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.WarrantyStatus;
@@ -17,7 +18,10 @@ public record TicketResponse(
         String mobileNumber,
         String villageOrArea,
         String productType,
-        TicketCategory category,
+        String category,
+        Long categoryId,
+        String categoryKey,
+        String categoryDisplayName,
         String complaintDescription,
         TicketStatus status,
         Instant createdAt,
@@ -45,6 +49,8 @@ public record TicketResponse(
     }
 
     public static TicketResponse from(Ticket ticket, BigDecimal totalCharge) {
+        TicketCategoryConfig categoryRecord = ticket.getCategoryRecord();
+        String categoryKey = categoryRecord != null ? categoryRecord.getCategoryKey() : fallbackCategoryKey(ticket.getCategory());
         return new TicketResponse(
                 ticket.getId(),
                 ticket.getTicketNumber(),
@@ -52,7 +58,10 @@ public record TicketResponse(
                 ticket.getMobileNumber(),
                 ticket.getVillageOrArea(),
                 ticket.getProductType(),
-                ticket.getCategory(),
+                categoryKey,
+                categoryRecord != null ? categoryRecord.getId() : null,
+                categoryKey,
+                categoryRecord != null ? categoryRecord.getDisplayName() : null,
                 ticket.getComplaintDescription(),
                 ticket.getStatus(),
                 ticket.getCreatedAt(),
@@ -74,5 +83,9 @@ public record TicketResponse(
                 ticket.getWarrantyUpdatedByEmployeeId(),
                 totalCharge != null ? totalCharge.setScale(2, RoundingMode.UNNECESSARY) : BigDecimal.ZERO.setScale(2)
         );
+    }
+
+    private static String fallbackCategoryKey(TicketCategory category) {
+        return category == null ? null : category.name();
     }
 }
