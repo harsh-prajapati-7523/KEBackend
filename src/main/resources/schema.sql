@@ -133,6 +133,63 @@ CREATE INDEX IF NOT EXISTS idx_ticket_categories_active ON ticket_categories(act
 
 CREATE INDEX IF NOT EXISTS idx_ticket_categories_sort_order ON ticket_categories(sort_order);
 
+CREATE TABLE IF NOT EXISTS ticket_field_definitions (
+    id BIGSERIAL PRIMARY KEY,
+    field_key VARCHAR(50) NOT NULL UNIQUE,
+    display_name VARCHAR(80) NOT NULL,
+    field_type VARCHAR(20) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    system_field BOOLEAN NOT NULL DEFAULT FALSE,
+    help_text VARCHAR(255),
+    default_required BOOLEAN NOT NULL DEFAULT FALSE,
+    sort_order INTEGER,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+ALTER TABLE ticket_field_definitions
+    ALTER COLUMN active SET DEFAULT TRUE;
+
+ALTER TABLE ticket_field_definitions
+    ALTER COLUMN system_field SET DEFAULT FALSE;
+
+ALTER TABLE ticket_field_definitions
+    ALTER COLUMN default_required SET DEFAULT FALSE;
+
+ALTER TABLE ticket_field_definitions
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE ticket_field_definitions
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE ticket_field_definitions
+    DROP CONSTRAINT IF EXISTS ck_ticket_field_definitions_field_key_format;
+
+ALTER TABLE ticket_field_definitions
+    ADD CONSTRAINT ck_ticket_field_definitions_field_key_format
+    CHECK (field_key ~ '^[A-Z0-9_]{3,50}$');
+
+ALTER TABLE ticket_field_definitions
+    DROP CONSTRAINT IF EXISTS ck_ticket_field_definitions_field_type;
+
+ALTER TABLE ticket_field_definitions
+    ADD CONSTRAINT ck_ticket_field_definitions_field_type
+    CHECK (field_type IN ('TEXT', 'NUMBER', 'DROPDOWN', 'TEXTAREA'));
+
+UPDATE ticket_field_definitions
+SET created_at = now()
+WHERE created_at IS NULL;
+
+UPDATE ticket_field_definitions
+SET updated_at = now()
+WHERE updated_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_ticket_field_definitions_active ON ticket_field_definitions(active);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_field_definitions_field_type ON ticket_field_definitions(field_type);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_field_definitions_sort_order ON ticket_field_definitions(sort_order);
+
 ALTER TABLE tickets
     ADD COLUMN IF NOT EXISTS category_id BIGINT;
 
