@@ -6,6 +6,8 @@ import com.ke.ticketsystemke.dto.CreateTicketDynamicValueRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
 import com.ke.ticketsystemke.dto.CustomerHistoryTicketResponse;
+import com.ke.ticketsystemke.dto.TicketDynamicValueResponse;
+import com.ke.ticketsystemke.dto.TicketDynamicValuesResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.entity.CategoryFieldConfig;
@@ -355,6 +357,23 @@ public class TicketService {
         log.info("event=customer_history_returned employeeId={} ticketId={} resultCount={}",
                 employeeId, ticketId, tickets.size());
         return new CustomerHistoryResponse(tickets.size(), tickets);
+    }
+
+    @Transactional(readOnly = true)
+    public TicketDynamicValuesResponse getDynamicValues(Long ticketId, String employeeId) {
+        if (!repository.existsById(ticketId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found");
+        }
+
+        List<TicketDynamicValueResponse> dynamicValues = ticketDynamicValueRepository
+                .findByTicketIdOrderByCreatedAtAscIdAsc(ticketId)
+                .stream()
+                .map(TicketDynamicValueResponse::from)
+                .toList();
+
+        log.info("event=ticket_dynamic_values_returned employeeId={} ticketId={} resultCount={}",
+                employeeId, ticketId, dynamicValues.size());
+        return new TicketDynamicValuesResponse(ticketId, dynamicValues);
     }
 
     @Transactional(readOnly = true)
