@@ -7,6 +7,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class CreateTicketRequest {
 
     @NotBlank
@@ -39,6 +42,8 @@ public class CreateTicketRequest {
 
     @Size(max = 80)
     private String productSerialNumber;
+
+    private List<CreateTicketDynamicValueRequest> dynamicValues = new ArrayList<>();
 
     public String getCustomerName() {
         return customerName;
@@ -126,5 +131,13 @@ public class CreateTicketRequest {
 
     public void setProductSerialNumber(String productSerialNumber) {
         this.productSerialNumber = productSerialNumber;
+    }
+
+    public List<CreateTicketDynamicValueRequest> getDynamicValues() {
+        return dynamicValues;
+    }
+
+    public void setDynamicValues(List<CreateTicketDynamicValueRequest> dynamicValues) {
+        this.dynamicValues = dynamicValues == null ? new ArrayList<>() : dynamicValues;
     }
 }

@@ -2,6 +2,8 @@ package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.AddCategoryFieldConfigRequest;
 import com.ke.ticketsystemke.dto.CategoryFieldConfigResponse;
+import com.ke.ticketsystemke.dto.TicketFormFieldResponse;
+import com.ke.ticketsystemke.dto.TicketFormFieldsResponse;
 import com.ke.ticketsystemke.dto.UpdateCategoryFieldConfigRequest;
 import com.ke.ticketsystemke.entity.CategoryFieldConfig;
 import com.ke.ticketsystemke.entity.TicketCategoryConfig;
@@ -45,6 +47,26 @@ public class CategoryFieldConfigService {
                 .stream()
                 .map(CategoryFieldConfigResponse::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public TicketFormFieldsResponse getFormFields(Long categoryId) {
+        TicketCategoryConfig category = findCategory(categoryId);
+        if (!category.isActive()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Inactive category cannot be used for ticket creation");
+        }
+
+        List<TicketFormFieldResponse> fields = categoryFieldConfigRepository.findRenderableFormFieldsByCategoryId(categoryId)
+                .stream()
+                .map(TicketFormFieldResponse::from)
+                .toList();
+
+        return new TicketFormFieldsResponse(
+                category.getId(),
+                category.getCategoryKey(),
+                category.getDisplayName(),
+                fields
+        );
     }
 
     @Transactional

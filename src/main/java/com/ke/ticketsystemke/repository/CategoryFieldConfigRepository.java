@@ -21,5 +21,21 @@ public interface CategoryFieldConfigRepository extends JpaRepository<CategoryFie
             """)
     List<CategoryFieldConfig> findAllByCategoryIdSorted(@Param("categoryId") Long categoryId);
 
+    @Query("""
+            SELECT config
+            FROM CategoryFieldConfig config
+            JOIN config.fieldDefinition fieldDefinition
+            WHERE config.category.id = :categoryId
+              AND config.visible = true
+              AND fieldDefinition.active = true
+              AND fieldDefinition.fieldType IN (
+                    com.ke.ticketsystemke.entity.TicketFieldType.TEXT,
+                    com.ke.ticketsystemke.entity.TicketFieldType.NUMBER,
+                    com.ke.ticketsystemke.entity.TicketFieldType.TEXTAREA
+              )
+            ORDER BY config.sortOrder ASC, fieldDefinition.fieldKey ASC, config.id ASC
+            """)
+    List<CategoryFieldConfig> findRenderableFormFieldsByCategoryId(@Param("categoryId") Long categoryId);
+
     Optional<CategoryFieldConfig> findByIdAndCategoryId(Long id, Long categoryId);
 }

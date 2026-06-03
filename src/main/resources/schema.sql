@@ -328,3 +328,45 @@ CREATE TABLE IF NOT EXISTS ticket_charge_items (
 CREATE INDEX IF NOT EXISTS idx_ticket_charge_items_ticket_id ON ticket_charge_items(ticket_id);
 
 CREATE INDEX IF NOT EXISTS idx_tickets_mobile_number ON tickets(mobile_number);
+
+CREATE TABLE IF NOT EXISTS ticket_dynamic_values (
+    id BIGSERIAL PRIMARY KEY,
+    ticket_id BIGINT NOT NULL,
+    field_definition_id BIGINT NOT NULL,
+    category_field_config_id BIGINT NOT NULL,
+    field_key_snapshot VARCHAR(50) NOT NULL,
+    field_label_snapshot VARCHAR(80) NOT NULL,
+    field_type_snapshot VARCHAR(20) NOT NULL,
+    value_text VARCHAR(1000),
+    value_number NUMERIC(12,2),
+    display_value VARCHAR(1000) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT fk_ticket_dynamic_values_ticket FOREIGN KEY (ticket_id)
+        REFERENCES tickets(id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_ticket_dynamic_values_field_definition FOREIGN KEY (field_definition_id)
+        REFERENCES ticket_field_definitions(id),
+    CONSTRAINT fk_ticket_dynamic_values_category_field_config FOREIGN KEY (category_field_config_id)
+        REFERENCES category_field_configs(id),
+    CONSTRAINT uk_ticket_dynamic_values_ticket_field UNIQUE (ticket_id, field_definition_id)
+);
+
+ALTER TABLE ticket_dynamic_values
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE ticket_dynamic_values
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE ticket_dynamic_values
+    DROP CONSTRAINT IF EXISTS ck_ticket_dynamic_values_field_type_snapshot;
+
+ALTER TABLE ticket_dynamic_values
+    ADD CONSTRAINT ck_ticket_dynamic_values_field_type_snapshot
+    CHECK (field_type_snapshot IN ('TEXT', 'NUMBER', 'DROPDOWN', 'TEXTAREA'));
+
+CREATE INDEX IF NOT EXISTS idx_ticket_dynamic_values_ticket_id ON ticket_dynamic_values(ticket_id);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_dynamic_values_field_definition_id ON ticket_dynamic_values(field_definition_id);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_dynamic_values_category_field_config_id ON ticket_dynamic_values(category_field_config_id);

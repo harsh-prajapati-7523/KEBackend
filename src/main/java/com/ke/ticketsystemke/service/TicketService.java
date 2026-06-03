@@ -2,18 +2,25 @@ package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.CancelTicketRequest;
 import com.ke.ticketsystemke.dto.CompleteTicketRequest;
+import com.ke.ticketsystemke.dto.CreateTicketDynamicValueRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
 import com.ke.ticketsystemke.dto.CustomerHistoryTicketResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
+import com.ke.ticketsystemke.entity.CategoryFieldConfig;
 import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketCategory;
 import com.ke.ticketsystemke.entity.TicketCategoryConfig;
+import com.ke.ticketsystemke.entity.TicketDynamicValue;
+import com.ke.ticketsystemke.entity.TicketFieldDefinition;
+import com.ke.ticketsystemke.entity.TicketFieldType;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WarrantyStatus;
+import com.ke.ticketsystemke.repository.CategoryFieldConfigRepository;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
+import com.ke.ticketsystemke.repository.TicketDynamicValueRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.TicketSpecifications;
 import org.springframework.http.HttpStatus;
@@ -32,22 +39,37 @@ import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class TicketService {
 
     private static final Logger log = LoggerFactory.getLogger(TicketService.class);
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final int DYNAMIC_TEXT_MAX_LENGTH = 255;
+    private static final int DYNAMIC_TEXTAREA_MAX_LENGTH = 1000;
 
     private final TicketRepository repository;
     private final TicketCategoryRepository ticketCategoryRepository;
+    private final CategoryFieldConfigRepository categoryFieldConfigRepository;
+    private final TicketDynamicValueRepository ticketDynamicValueRepository;
     private final TicketChargeService ticketChargeService;
 
-    public TicketService(TicketRepository repository, TicketCategoryRepository ticketCategoryRepository, TicketChargeService ticketChargeService) {
+    public TicketService(
+            TicketRepository repository,
+            TicketCategoryRepository ticketCategoryRepository,
+            CategoryFieldConfigRepository categoryFieldConfigRepository,
+            TicketDynamicValueRepository ticketDynamicValueRepository,
+            TicketChargeService ticketChargeService
+    ) {
         this.repository = repository;
         this.ticketCategoryRepository = ticketCategoryRepository;
+        this.categoryFieldConfigRepository = categoryFieldConfigRepository;
+        this.ticketDynamicValueRepository = ticketDynamicValueRepository;
         this.ticketChargeService = ticketChargeService;
     }
 
@@ -59,13 +81,16 @@ public class TicketService {
         // Business-level create log
         log.info("event=ticket_create_requested employeeId={}", createdByEmployeeId);
 
+        TicketCategoryConfig category = resolveAssignableCategory(request.getCategoryId(), request.getCategory());
+        List<DynamicValueDraft> dynamicValueDrafts = validateDynamicValues(category, request.getDynamicValues());
+
         Ticket ticket = new Ticket();
         ticket.setTicketNumber(formatTicketNumber(repository.getNextTicketNumberValue()));
         ticket.setCustomerName(request.getCustomerName().trim());
         ticket.setMobileNumber(request.getMobileNumber());
         ticket.setVillageOrArea(trimToNull(request.getVillageOrArea()));
         ticket.setProductType(request.getProductType().trim());
-        assignCategory(ticket, resolveAssignableCategory(request.getCategoryId(), request.getCategory()));
+        assignCategory(ticket, category);
         ticket.setComplaintDescription(request.getComplaintDescription().trim());
         ticket.setStatus(TicketStatus.NEW);
         ticket.setCreatedByEmployeeId(createdByEmployeeId);
@@ -83,6 +108,7 @@ public class TicketService {
         ticket.setWarrantyUpdatedByEmployeeId(createdByEmployeeId);
 
         Ticket saved = repository.save(ticket);
+        saveDynamicValues(saved, dynamicValueDrafts);
         return TicketResponse.from(saved, BigDecimal.ZERO.setScale(2));
     }
 
@@ -390,6 +416,131 @@ public class TicketService {
                 .toList();
     }
 
+    private List<DynamicValueDraft> validateDynamicValues(
+            TicketCategoryConfig category,
+            List<CreateTicketDynamicValueRequest> requestedValues
+    ) {
+        List<CategoryFieldConfig> configs = categoryFieldConfigRepository.findRenderableFormFieldsByCategoryId(category.getId());
+        Map<Long, CategoryFieldConfig> configsById = new HashMap<>();
+        for (CategoryFieldConfig config : configs) {
+            configsById.put(config.getId(), config);
+        }
+
+        List<DynamicValueDraft> drafts = new ArrayList<>();
+        Map<Long, Boolean> submittedFieldDefinitionIds = new HashMap<>();
+
+        for (CreateTicketDynamicValueRequest valueRequest : requestedValues == null ? Collections.<CreateTicketDynamicValueRequest>emptyList() : requestedValues) {
+            if (valueRequest == null
+                    || valueRequest.getCategoryFieldConfigId() == null
+                    || valueRequest.getFieldDefinitionId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid dynamic field value");
+            }
+
+            CategoryFieldConfig config = configsById.get(valueRequest.getCategoryFieldConfigId());
+            if (config == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dynamic field is not configured for this category");
+            }
+
+            TicketFieldDefinition fieldDefinition = config.getFieldDefinition();
+            if (!fieldDefinition.getId().equals(valueRequest.getFieldDefinitionId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dynamic field does not match its category configuration");
+            }
+
+            if (submittedFieldDefinitionIds.put(fieldDefinition.getId(), Boolean.TRUE) != null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate dynamic field value submitted");
+            }
+
+            DynamicValueDraft draft = validateDynamicValue(config, valueRequest.getValue());
+            if (draft != null) {
+                drafts.add(draft);
+            }
+        }
+
+        for (CategoryFieldConfig config : configs) {
+            if (config.isRequired() && !submittedFieldDefinitionIds.containsKey(config.getFieldDefinition().getId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, config.getFieldDefinition().getDisplayName() + " is required");
+            }
+        }
+
+        return drafts;
+    }
+
+    private DynamicValueDraft validateDynamicValue(CategoryFieldConfig config, String rawValue) {
+        TicketFieldDefinition fieldDefinition = config.getFieldDefinition();
+        TicketFieldType fieldType = fieldDefinition.getFieldType();
+        String trimmedValue = trimToNull(rawValue);
+
+        if (trimmedValue == null) {
+            if (config.isRequired()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldDefinition.getDisplayName() + " is required");
+            }
+            return null;
+        }
+
+        if (fieldType == TicketFieldType.TEXT) {
+            validateMaxLength(trimmedValue, DYNAMIC_TEXT_MAX_LENGTH, fieldDefinition.getDisplayName());
+            return new DynamicValueDraft(config, trimmedValue, null, trimmedValue);
+        }
+
+        if (fieldType == TicketFieldType.TEXTAREA) {
+            validateMaxLength(trimmedValue, DYNAMIC_TEXTAREA_MAX_LENGTH, fieldDefinition.getDisplayName());
+            return new DynamicValueDraft(config, trimmedValue, null, trimmedValue);
+        }
+
+        if (fieldType == TicketFieldType.NUMBER) {
+            BigDecimal numberValue = parseDynamicNumber(trimmedValue, fieldDefinition.getDisplayName());
+            return new DynamicValueDraft(config, null, numberValue, numberValue.toPlainString());
+        }
+
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported dynamic field type");
+    }
+
+    private void validateMaxLength(String value, int maxLength, String fieldLabel) {
+        if (value.length() > maxLength) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldLabel + " must be at most " + maxLength + " characters");
+        }
+    }
+
+    private BigDecimal parseDynamicNumber(String value, String fieldLabel) {
+        try {
+            BigDecimal number = new BigDecimal(value);
+            if (number.scale() > 2 || number.precision() - number.scale() > 10) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldLabel + " must fit within 12 digits and 2 decimal places");
+            }
+            return number;
+        } catch (NumberFormatException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldLabel + " must be a valid number");
+        }
+    }
+
+    private void saveDynamicValues(Ticket ticket, List<DynamicValueDraft> drafts) {
+        if (drafts.isEmpty()) {
+            return;
+        }
+
+        List<TicketDynamicValue> dynamicValues = drafts.stream()
+                .map(draft -> toDynamicValue(ticket, draft))
+                .toList();
+        ticketDynamicValueRepository.saveAll(dynamicValues);
+    }
+
+    private TicketDynamicValue toDynamicValue(Ticket ticket, DynamicValueDraft draft) {
+        CategoryFieldConfig config = draft.config();
+        TicketFieldDefinition fieldDefinition = config.getFieldDefinition();
+
+        TicketDynamicValue dynamicValue = new TicketDynamicValue();
+        dynamicValue.setTicket(ticket);
+        dynamicValue.setFieldDefinition(fieldDefinition);
+        dynamicValue.setCategoryFieldConfig(config);
+        dynamicValue.setFieldKeySnapshot(fieldDefinition.getFieldKey());
+        dynamicValue.setFieldLabelSnapshot(fieldDefinition.getDisplayName());
+        dynamicValue.setFieldTypeSnapshot(fieldDefinition.getFieldType());
+        dynamicValue.setValueText(draft.valueText());
+        dynamicValue.setValueNumber(draft.valueNumber());
+        dynamicValue.setDisplayValue(draft.displayValue());
+        return dynamicValue;
+    }
+
     private String normalizeSearchQuery(String query) {
         if (query == null) {
             return null;
@@ -519,5 +670,13 @@ public class TicketService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product serial number is required for in-warranty tickets");
             }
         }
+    }
+
+    private record DynamicValueDraft(
+            CategoryFieldConfig config,
+            String valueText,
+            BigDecimal valueNumber,
+            String displayValue
+    ) {
     }
 }
