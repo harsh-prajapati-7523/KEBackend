@@ -15,6 +15,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     boolean existsByEmployeeId(String employeeId);
 
+    boolean existsByRole(EmployeeRole role);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<Employee> findAllByRole(EmployeeRole role);
 }
