@@ -83,6 +83,11 @@ public class SecurityConfig {
                         .hasRole("SUPER_ADMIN")
 
                         .requestMatchers(
+                                "/volt/ticket-categories/*/field-configs",
+                                "/volt/ticket-categories/*/field-configs/**")
+                        .hasRole("SUPER_ADMIN")
+
+                        .requestMatchers(
                                 "/volt/ticket-fields",
                                 "/volt/ticket-fields/**")
                         .hasRole("SUPER_ADMIN")

@@ -190,6 +190,48 @@ CREATE INDEX IF NOT EXISTS idx_ticket_field_definitions_field_type ON ticket_fie
 
 CREATE INDEX IF NOT EXISTS idx_ticket_field_definitions_sort_order ON ticket_field_definitions(sort_order);
 
+CREATE TABLE IF NOT EXISTS category_field_configs (
+    id BIGSERIAL PRIMARY KEY,
+    category_id BIGINT NOT NULL,
+    field_definition_id BIGINT NOT NULL,
+    required BOOLEAN NOT NULL DEFAULT FALSE,
+    visible BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INTEGER,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT fk_category_field_configs_category FOREIGN KEY (category_id)
+        REFERENCES ticket_categories(id),
+    CONSTRAINT fk_category_field_configs_field_definition FOREIGN KEY (field_definition_id)
+        REFERENCES ticket_field_definitions(id),
+    CONSTRAINT uk_category_field_configs_category_field UNIQUE (category_id, field_definition_id)
+);
+
+ALTER TABLE category_field_configs
+    ALTER COLUMN required SET DEFAULT FALSE;
+
+ALTER TABLE category_field_configs
+    ALTER COLUMN visible SET DEFAULT TRUE;
+
+ALTER TABLE category_field_configs
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE category_field_configs
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+UPDATE category_field_configs
+SET created_at = now()
+WHERE created_at IS NULL;
+
+UPDATE category_field_configs
+SET updated_at = now()
+WHERE updated_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_category_field_configs_category_id ON category_field_configs(category_id);
+
+CREATE INDEX IF NOT EXISTS idx_category_field_configs_field_definition_id ON category_field_configs(field_definition_id);
+
+CREATE INDEX IF NOT EXISTS idx_category_field_configs_sort_order ON category_field_configs(sort_order);
+
 ALTER TABLE tickets
     ADD COLUMN IF NOT EXISTS category_id BIGINT;
 
