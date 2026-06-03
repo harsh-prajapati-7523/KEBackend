@@ -22,8 +22,12 @@ public class Employee {
     private String password;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column
     private EmployeeRole role;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "role_id")
+    private Role roleRecord;
 
     @Column(nullable = false)
     private boolean active = true;
@@ -68,6 +72,14 @@ public class Employee {
 
     public void setRole(EmployeeRole role) {
         this.role = role;
+    }
+
+    public Role getRoleRecord() {
+        return roleRecord;
+    }
+
+    public void setRoleRecord(Role roleRecord) {
+        this.roleRecord = roleRecord;
     }
 
     public boolean isActive() {

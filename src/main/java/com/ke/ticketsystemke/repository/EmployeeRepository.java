@@ -19,4 +19,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<Employee> findAllByRole(EmployeeRole role);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<Employee> findAllByRoleRecord_RoleKey(String roleKey);
 }

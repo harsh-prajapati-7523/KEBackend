@@ -51,6 +51,43 @@ SET
     system_role = TRUE,
     updated_at = now();
 
+ALTER TABLE employees
+    ADD COLUMN IF NOT EXISTS role_id BIGINT;
+
+ALTER TABLE employees
+    ALTER COLUMN role DROP NOT NULL;
+
+UPDATE employees e
+SET role_id = r.id
+FROM roles r
+WHERE e.role = r.role_key
+  AND e.role_id IS NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_employees_role'
+    ) THEN
+        ALTER TABLE employees
+            ADD CONSTRAINT fk_employees_role FOREIGN KEY (role_id)
+            REFERENCES roles(id);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM employees
+        WHERE role IS NOT NULL
+          AND role_id IS NULL
+    ) THEN
+        RAISE EXCEPTION 'Employee role_id backfill failed for one or more employees';
+    END IF;
+END $$;
+
 --Ticket Number Sequence Creation
 CREATE SEQUENCE IF NOT EXISTS ticket_number_seq
     START WITH 1

@@ -57,15 +57,24 @@ public class AuthController {
 
         String token = jwtService.generateToken(employee.getEmployeeId());
 
-        log.info("event=login_success employeeId={} role={}", employeeId, employee.getRole());
+        String role = resolveRoleKey(employee);
+
+        log.info("event=login_success employeeId={} role={}", employeeId, role);
 
         return ResponseEntity.ok(
                 new LoginResponse(
                         token,
                         employee.getName(),
-                        employee.getRole().name(),
+                        role,
                         employee.getEmployeeId()
                 )
         );
+    }
+
+    private String resolveRoleKey(Employee employee) {
+        if (employee.getRoleRecord() != null) {
+            return employee.getRoleRecord().getRoleKey();
+        }
+        return employee.getRole() == null ? null : employee.getRole().name();
     }
 }

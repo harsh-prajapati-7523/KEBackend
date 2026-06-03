@@ -3,6 +3,7 @@ package com.ke.ticketsystemke.config;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.EmployeeRole;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
+import com.ke.ticketsystemke.repository.RoleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,17 +24,20 @@ public class BootstrapSuperAdminInitializer implements ApplicationRunner {
     private static final String DEVELOPMENT_FALLBACK_PASSWORD = "admin123";
 
     private final EmployeeRepository employeeRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final Environment environment;
     private final String bootstrapPassword;
 
     public BootstrapSuperAdminInitializer(
             EmployeeRepository employeeRepository,
+            RoleRepository roleRepository,
             PasswordEncoder passwordEncoder,
             Environment environment,
             @Value("${BOOTSTRAP_SUPER_ADMIN_PASSWORD:}") String bootstrapPassword
     ) {
         this.employeeRepository = employeeRepository;
+        this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.environment = environment;
         this.bootstrapPassword = bootstrapPassword;
@@ -60,6 +64,8 @@ public class BootstrapSuperAdminInitializer implements ApplicationRunner {
         employee.setEmployeeId(BOOTSTRAP_EMPLOYEE_ID);
         employee.setName(BOOTSTRAP_NAME);
         employee.setRole(EmployeeRole.SUPER_ADMIN);
+        roleRepository.findByRoleKey(EmployeeRole.SUPER_ADMIN.name())
+                .ifPresent(employee::setRoleRecord);
         employee.setActive(true);
         employee.setPassword(passwordEncoder.encode(password));
 

@@ -2,7 +2,6 @@ package com.ke.ticketsystemke.dto;
 
 import com.ke.ticketsystemke.entity.EmployeeRole;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -16,8 +15,9 @@ public class CreateEmployeeRequest {
     @Pattern(regexp = "^[A-Z0-9_]{3,30}$", message = "employeeId must contain 3 to 30 uppercase letters, digits, or underscores")
     private String employeeId;
 
-    @NotNull
     private EmployeeRole role;
+
+    private Long roleId;
 
     @NotBlank
     @Size(min = 8, message = "password must contain at least 8 characters")
@@ -47,6 +47,14 @@ public class CreateEmployeeRequest {
 
     public void setRole(EmployeeRole role) {
         this.role = role;
+    }
+
+    public Long getRoleId() {
+        return roleId;
+    }
+
+    public void setRoleId(Long roleId) {
+        this.roleId = roleId;
     }
 
     public String getPassword() {

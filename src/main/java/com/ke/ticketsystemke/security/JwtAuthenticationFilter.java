@@ -72,9 +72,7 @@ public class JwtAuthenticationFilter
                 throw new IllegalStateException("Inactive employee");
             }
 
-            String role = employee
-                    .getRole()
-                    .name();
+            String role = resolveRoleKey(employee);
 
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
@@ -107,5 +105,12 @@ public class JwtAuthenticationFilter
         } finally {
             MDC.remove("employeeId");
         }
+    }
+
+    private String resolveRoleKey(Employee employee) {
+        if (employee.getRoleRecord() != null) {
+            return employee.getRoleRecord().getRoleKey();
+        }
+        return employee.getRole() == null ? null : employee.getRole().name();
     }
 }

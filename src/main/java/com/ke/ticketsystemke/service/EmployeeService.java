@@ -4,7 +4,9 @@ import com.ke.ticketsystemke.dto.CreateEmployeeRequest;
 import com.ke.ticketsystemke.dto.EmployeeResponse;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.EmployeeRole;
+import com.ke.ticketsystemke.entity.Role;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
+import com.ke.ticketsystemke.repository.RoleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,12 +22,15 @@ import java.util.List;
 public class EmployeeService {
 
     private static final Logger log = LoggerFactory.getLogger(EmployeeService.class);
+    private static final String SUPER_ADMIN_ROLE_KEY = "SUPER_ADMIN";
 
     private final EmployeeRepository employeeRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public EmployeeService(EmployeeRepository employeeRepository, PasswordEncoder passwordEncoder) {
+    public EmployeeService(EmployeeRepository employeeRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder) {
         this.employeeRepository = employeeRepository;
+        this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -47,14 +52,14 @@ public class EmployeeService {
         Employee employee = new Employee();
         employee.setName(request.getName().trim());
         employee.setEmployeeId(employeeId);
-        employee.setRole(request.getRole());
+        assignRole(employee, resolveAssignableRole(request.getRoleId(), request.getRole()));
         employee.setPassword(passwordEncoder.encode(request.getPassword()));
         employee.setActive(request.getActive() == null || request.getActive());
 
         try {
             Employee created = employeeRepository.saveAndFlush(employee);
             log.info("event=employee_created actorEmployeeId={} targetEmployeeId={} targetRole={} activeStatus={}",
-                    actorEmployeeId, created.getEmployeeId(), created.getRole(), created.isActive());
+                    actorEmployeeId, created.getEmployeeId(), effectiveRoleKey(created), created.isActive());
             return EmployeeResponse.from(created);
         } catch (DataIntegrityViolationException ex) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Employee ID already exists");
@@ -82,22 +87,24 @@ public class EmployeeService {
     }
 
     @Transactional
-    public EmployeeResponse updateRole(Long id, EmployeeRole role, String actorEmployeeId) {
+    public EmployeeResponse updateRole(Long id, Long roleId, EmployeeRole role, String actorEmployeeId) {
         Employee employee = fetchEmployee(id);
+        Role newRole = resolveAssignableRole(roleId, role);
+        String newRoleKey = newRole.getRoleKey();
+        String oldRoleKey = effectiveRoleKey(employee);
 
-        if (employee.getEmployeeId().equals(actorEmployeeId) && role != EmployeeRole.SUPER_ADMIN) {
+        if (employee.getEmployeeId().equals(actorEmployeeId) && !SUPER_ADMIN_ROLE_KEY.equals(newRoleKey)) {
             deny(actorEmployeeId, employee, "self_demotion");
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot change your own SUPER_ADMIN role");
         }
-        if (employee.getRole() == EmployeeRole.SUPER_ADMIN && role != EmployeeRole.SUPER_ADMIN) {
+        if (isSuperAdmin(employee) && !SUPER_ADMIN_ROLE_KEY.equals(newRoleKey)) {
             requireAnotherActiveSuperAdmin(employee, actorEmployeeId, "last_super_admin_demotion");
         }
 
-        EmployeeRole oldRole = employee.getRole();
-        employee.setRole(role);
+        assignRole(employee, newRole);
         Employee saved = employeeRepository.save(employee);
         log.info("event=employee_role_changed actorEmployeeId={} targetEmployeeId={} oldRole={} newRole={}",
-                actorEmployeeId, saved.getEmployeeId(), oldRole, saved.getRole());
+                actorEmployeeId, saved.getEmployeeId(), oldRoleKey, effectiveRoleKey(saved));
         return EmployeeResponse.from(saved);
     }
 
@@ -117,8 +124,12 @@ public class EmployeeService {
     }
 
     private void requireAnotherActiveSuperAdmin(Employee employee, String actorEmployeeId, String reason) {
-        if (employee.getRole() == EmployeeRole.SUPER_ADMIN
+        if (isSuperAdmin(employee)
                 && employee.isActive()
+                && employeeRepository.findAllByRoleRecord_RoleKey(SUPER_ADMIN_ROLE_KEY)
+                        .stream()
+                        .filter(Employee::isActive)
+                        .count() <= 1
                 && employeeRepository.findAllByRole(EmployeeRole.SUPER_ADMIN)
                         .stream()
                         .filter(Employee::isActive)
@@ -126,6 +137,50 @@ public class EmployeeService {
             deny(actorEmployeeId, employee, reason);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot remove the last active SUPER_ADMIN");
         }
+    }
+
+    private Role resolveAssignableRole(Long roleId, EmployeeRole legacyRole) {
+        Role role = resolveRole(roleId, legacyRole);
+        if (!role.isActive()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Inactive role cannot be assigned");
+        }
+        return role;
+    }
+
+    private Role resolveRole(Long roleId, EmployeeRole legacyRole) {
+        if (roleId != null) {
+            return roleRepository.findById(roleId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role not found"));
+        }
+        if (legacyRole != null) {
+            return roleRepository.findByRoleKey(legacyRole.name())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role not found"));
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role is required");
+    }
+
+    private void assignRole(Employee employee, Role role) {
+        employee.setRoleRecord(role);
+        employee.setRole(toBuiltInRole(role.getRoleKey()));
+    }
+
+    private EmployeeRole toBuiltInRole(String roleKey) {
+        try {
+            return EmployeeRole.valueOf(roleKey);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private boolean isSuperAdmin(Employee employee) {
+        return SUPER_ADMIN_ROLE_KEY.equals(effectiveRoleKey(employee));
+    }
+
+    private String effectiveRoleKey(Employee employee) {
+        if (employee.getRoleRecord() != null) {
+            return employee.getRoleRecord().getRoleKey();
+        }
+        return employee.getRole() == null ? null : employee.getRole().name();
     }
 
     private void deny(String actorEmployeeId, Employee employee, String reason) {

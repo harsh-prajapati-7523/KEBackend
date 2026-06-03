@@ -59,7 +59,7 @@ public class EmployeeController {
             @Valid @RequestBody UpdateEmployeeRoleRequest request,
             Authentication authentication
     ) {
-        return employeeService.updateRole(id, request.getRole(), authentication.getName());
+        return employeeService.updateRole(id, request.getRoleId(), request.getRole(), authentication.getName());
     }
 
     @PatchMapping("/{id}/password")
