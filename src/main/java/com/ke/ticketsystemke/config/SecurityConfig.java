@@ -73,6 +73,11 @@ public class SecurityConfig {
                         .hasRole("SUPER_ADMIN")
 
                         .requestMatchers(
+                                "/volt/workflow/transitions",
+                                "/volt/workflow/transitions/**")
+                        .hasRole("SUPER_ADMIN")
+
+                        .requestMatchers(
                                 "/volt/employees",
                                 "/volt/employees/**")
                         .authenticated()

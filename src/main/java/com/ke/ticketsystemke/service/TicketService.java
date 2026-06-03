@@ -14,6 +14,7 @@ import com.ke.ticketsystemke.entity.CategoryFieldConfig;
 import com.ke.ticketsystemke.entity.DropdownOption;
 import com.ke.ticketsystemke.entity.DropdownSource;
 import com.ke.ticketsystemke.entity.ManufacturerStatus;
+import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketCategory;
 import com.ke.ticketsystemke.entity.TicketCategoryConfig;
@@ -64,6 +65,7 @@ public class TicketService {
     private final DropdownOptionRepository dropdownOptionRepository;
     private final TicketDynamicValueRepository ticketDynamicValueRepository;
     private final TicketChargeService ticketChargeService;
+    private final WorkflowService workflowService;
 
     public TicketService(
             TicketRepository repository,
@@ -71,7 +73,8 @@ public class TicketService {
             CategoryFieldConfigRepository categoryFieldConfigRepository,
             DropdownOptionRepository dropdownOptionRepository,
             TicketDynamicValueRepository ticketDynamicValueRepository,
-            TicketChargeService ticketChargeService
+            TicketChargeService ticketChargeService,
+            WorkflowService workflowService
     ) {
         this.repository = repository;
         this.ticketCategoryRepository = ticketCategoryRepository;
@@ -79,6 +82,7 @@ public class TicketService {
         this.dropdownOptionRepository = dropdownOptionRepository;
         this.ticketDynamicValueRepository = ticketDynamicValueRepository;
         this.ticketChargeService = ticketChargeService;
+        this.workflowService = workflowService;
     }
 
     @Transactional
@@ -133,6 +137,7 @@ public class TicketService {
 
         TicketStatus status = ticket.getStatus();
         if (status == TicketStatus.NEW || status == TicketStatus.PICKED) {
+            workflowService.requireTransitionAllowed(AccessKey.PICK_TICKET, status, TicketStatus.PICKED);
             String previousOwner = ticket.getPickedByEmployeeId();
             ticket.setStatus(TicketStatus.PICKED);
             ticket.setPickedByEmployeeId(employeeId);
@@ -161,6 +166,7 @@ public class TicketService {
                 ));
 
         if (ticket.getStatus() == TicketStatus.PICKED) {
+            workflowService.requireTransitionAllowed(AccessKey.START_WORK, TicketStatus.PICKED, TicketStatus.IN_PROGRESS);
             ticket.setStatus(TicketStatus.IN_PROGRESS);
             String previousOwner = ticket.getPickedByEmployeeId();
             ticket.setPickedByEmployeeId(employeeId);
@@ -197,6 +203,8 @@ public class TicketService {
                     "Ticket can only be completed from IN_PROGRESS status"
             );
         }
+
+        workflowService.requireTransitionAllowed(AccessKey.COMPLETE_TICKET, TicketStatus.IN_PROGRESS, TicketStatus.COMPLETED);
 
         if (!isAdminRole(role) && !employeeId.equals(ticket.getPickedByEmployeeId())) {
             log.warn("event=completion_denied ticketId={} status={} employeeId={} role={}", ticketId, ticket.getStatus(), employeeId, role);
@@ -311,6 +319,7 @@ public class TicketService {
         }
 
         TicketStatus previousStatus = ticket.getStatus();
+        workflowService.requireTransitionAllowed(AccessKey.CANCEL_TICKET, previousStatus, TicketStatus.CANCELLED);
         ticket.setStatus(TicketStatus.CANCELLED);
         ticket.setCancelledAt(Instant.now());
         ticket.setCancelledByEmployeeId(employeeId);

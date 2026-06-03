@@ -189,6 +189,91 @@ CROSS JOIN (
 WHERE r.role_key IN ('EMPLOYEE', 'TECHNICIAN')
 ON CONFLICT (role_id, access_key) DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS workflow_transitions (
+    id BIGSERIAL PRIMARY KEY,
+    action_key VARCHAR(60) NOT NULL,
+    display_name VARCHAR(80) NOT NULL,
+    from_status VARCHAR(30) NOT NULL,
+    to_status VARCHAR(30) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INTEGER,
+    system_transition BOOLEAN NOT NULL DEFAULT TRUE,
+    protected_transition BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_by_employee_id BIGINT,
+    CONSTRAINT fk_workflow_transitions_updated_by_employee FOREIGN KEY (updated_by_employee_id)
+        REFERENCES employees(id),
+    CONSTRAINT uk_workflow_transitions_action_from_to UNIQUE (action_key, from_status, to_status),
+    CONSTRAINT ck_workflow_transitions_action_key CHECK (action_key IN (
+        'PICK_TICKET',
+        'START_WORK',
+        'COMPLETE_TICKET',
+        'CANCEL_TICKET'
+    )),
+    CONSTRAINT ck_workflow_transitions_from_status CHECK (from_status IN (
+        'NEW',
+        'PICKED',
+        'IN_PROGRESS',
+        'COMPLETED',
+        'CANCELLED'
+    )),
+    CONSTRAINT ck_workflow_transitions_to_status CHECK (to_status IN (
+        'NEW',
+        'PICKED',
+        'IN_PROGRESS',
+        'COMPLETED',
+        'CANCELLED'
+    )),
+    CONSTRAINT ck_workflow_transitions_terminal_from_status CHECK (from_status NOT IN ('COMPLETED', 'CANCELLED'))
+);
+
+ALTER TABLE workflow_transitions
+    ALTER COLUMN active SET DEFAULT TRUE;
+
+ALTER TABLE workflow_transitions
+    ALTER COLUMN system_transition SET DEFAULT TRUE;
+
+ALTER TABLE workflow_transitions
+    ALTER COLUMN protected_transition SET DEFAULT TRUE;
+
+ALTER TABLE workflow_transitions
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE workflow_transitions
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS idx_workflow_transitions_action_from_active
+    ON workflow_transitions(action_key, from_status, active);
+
+INSERT INTO workflow_transitions (
+    action_key,
+    display_name,
+    from_status,
+    to_status,
+    active,
+    sort_order,
+    system_transition,
+    protected_transition,
+    created_at,
+    updated_at
+)
+VALUES
+    ('PICK_TICKET', 'Pick Ticket', 'NEW', 'PICKED', TRUE, 10, TRUE, TRUE, now(), now()),
+    ('PICK_TICKET', 'Pick Ticket', 'PICKED', 'PICKED', TRUE, 20, TRUE, TRUE, now(), now()),
+    ('START_WORK', 'Start Work', 'PICKED', 'IN_PROGRESS', TRUE, 30, TRUE, TRUE, now(), now()),
+    ('COMPLETE_TICKET', 'Complete Ticket', 'IN_PROGRESS', 'COMPLETED', TRUE, 40, TRUE, TRUE, now(), now()),
+    ('CANCEL_TICKET', 'Cancel Ticket', 'NEW', 'CANCELLED', TRUE, 50, TRUE, TRUE, now(), now()),
+    ('CANCEL_TICKET', 'Cancel Ticket', 'PICKED', 'CANCELLED', TRUE, 60, TRUE, TRUE, now(), now()),
+    ('CANCEL_TICKET', 'Cancel Ticket', 'IN_PROGRESS', 'CANCELLED', TRUE, 70, TRUE, TRUE, now(), now())
+ON CONFLICT (action_key, from_status, to_status) DO UPDATE
+SET
+    display_name = EXCLUDED.display_name,
+    sort_order = EXCLUDED.sort_order,
+    system_transition = TRUE,
+    protected_transition = TRUE,
+    updated_at = now();
+
 CREATE TABLE IF NOT EXISTS ticket_categories (
     id BIGSERIAL PRIMARY KEY,
     category_key VARCHAR(40) NOT NULL UNIQUE,
