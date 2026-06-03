@@ -3,12 +3,16 @@ package com.ke.ticketsystemke.service;
 import com.ke.ticketsystemke.dto.AddCategoryFieldConfigRequest;
 import com.ke.ticketsystemke.dto.CategoryFieldConfigResponse;
 import com.ke.ticketsystemke.dto.TicketFormFieldResponse;
+import com.ke.ticketsystemke.dto.TicketFormFieldOptionResponse;
 import com.ke.ticketsystemke.dto.TicketFormFieldsResponse;
 import com.ke.ticketsystemke.dto.UpdateCategoryFieldConfigRequest;
 import com.ke.ticketsystemke.entity.CategoryFieldConfig;
+import com.ke.ticketsystemke.entity.DropdownSource;
 import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.entity.TicketFieldDefinition;
+import com.ke.ticketsystemke.entity.TicketFieldType;
 import com.ke.ticketsystemke.repository.CategoryFieldConfigRepository;
+import com.ke.ticketsystemke.repository.DropdownOptionRepository;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
 import com.ke.ticketsystemke.repository.TicketFieldDefinitionRepository;
 import org.slf4j.Logger;
@@ -29,15 +33,18 @@ public class CategoryFieldConfigService {
     private final CategoryFieldConfigRepository categoryFieldConfigRepository;
     private final TicketCategoryRepository ticketCategoryRepository;
     private final TicketFieldDefinitionRepository ticketFieldDefinitionRepository;
+    private final DropdownOptionRepository dropdownOptionRepository;
 
     public CategoryFieldConfigService(
             CategoryFieldConfigRepository categoryFieldConfigRepository,
             TicketCategoryRepository ticketCategoryRepository,
-            TicketFieldDefinitionRepository ticketFieldDefinitionRepository
+            TicketFieldDefinitionRepository ticketFieldDefinitionRepository,
+            DropdownOptionRepository dropdownOptionRepository
     ) {
         this.categoryFieldConfigRepository = categoryFieldConfigRepository;
         this.ticketCategoryRepository = ticketCategoryRepository;
         this.ticketFieldDefinitionRepository = ticketFieldDefinitionRepository;
+        this.dropdownOptionRepository = dropdownOptionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -58,7 +65,7 @@ public class CategoryFieldConfigService {
 
         List<TicketFormFieldResponse> fields = categoryFieldConfigRepository.findRenderableFormFieldsByCategoryId(categoryId)
                 .stream()
-                .map(TicketFormFieldResponse::from)
+                .map(this::toFormFieldResponse)
                 .toList();
 
         return new TicketFormFieldsResponse(
@@ -169,5 +176,21 @@ public class CategoryFieldConfigService {
         validateCategoryExists(categoryId);
         return categoryFieldConfigRepository.findByIdAndCategoryId(configId, categoryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category field config not found"));
+    }
+
+    private TicketFormFieldResponse toFormFieldResponse(CategoryFieldConfig config) {
+        TicketFieldDefinition fieldDefinition = config.getFieldDefinition();
+        if (fieldDefinition.getFieldType() != TicketFieldType.DROPDOWN) {
+            return TicketFormFieldResponse.from(config);
+        }
+
+        DropdownSource dropdownSource = fieldDefinition.getDropdownSource();
+        List<TicketFormFieldOptionResponse> options = dropdownSource == null
+                ? List.of()
+                : dropdownOptionRepository.findAllBySourceIdAndActiveTrueOrderBySortOrderAscDisplayValueAscIdAsc(dropdownSource.getId())
+                        .stream()
+                        .map(TicketFormFieldOptionResponse::from)
+                        .toList();
+        return TicketFormFieldResponse.from(config, options);
     }
 }

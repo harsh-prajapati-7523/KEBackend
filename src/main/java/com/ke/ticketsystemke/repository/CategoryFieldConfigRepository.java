@@ -28,10 +28,23 @@ public interface CategoryFieldConfigRepository extends JpaRepository<CategoryFie
             WHERE config.category.id = :categoryId
               AND config.visible = true
               AND fieldDefinition.active = true
-              AND fieldDefinition.fieldType IN (
-                    com.ke.ticketsystemke.entity.TicketFieldType.TEXT,
-                    com.ke.ticketsystemke.entity.TicketFieldType.NUMBER,
-                    com.ke.ticketsystemke.entity.TicketFieldType.TEXTAREA
+              AND (
+                    fieldDefinition.fieldType IN (
+                        com.ke.ticketsystemke.entity.TicketFieldType.TEXT,
+                        com.ke.ticketsystemke.entity.TicketFieldType.NUMBER,
+                        com.ke.ticketsystemke.entity.TicketFieldType.TEXTAREA
+                    )
+                    OR (
+                        fieldDefinition.fieldType = com.ke.ticketsystemke.entity.TicketFieldType.DROPDOWN
+                        AND fieldDefinition.dropdownSource IS NOT NULL
+                        AND fieldDefinition.dropdownSource.active = true
+                        AND EXISTS (
+                            SELECT dropdownOption
+                            FROM DropdownOption dropdownOption
+                            WHERE dropdownOption.source = fieldDefinition.dropdownSource
+                              AND dropdownOption.active = true
+                        )
+                    )
               )
             ORDER BY config.sortOrder ASC, fieldDefinition.fieldKey ASC, config.id ASC
             """)

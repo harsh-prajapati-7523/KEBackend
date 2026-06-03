@@ -3,6 +3,7 @@ package com.ke.ticketsystemke.controller;
 import com.ke.ticketsystemke.dto.CreateTicketFieldDefinitionRequest;
 import com.ke.ticketsystemke.dto.TicketFieldDefinitionResponse;
 import com.ke.ticketsystemke.dto.UpdateTicketFieldDefinitionStatusRequest;
+import com.ke.ticketsystemke.dto.UpdateTicketFieldDropdownSourceRequest;
 import com.ke.ticketsystemke.service.TicketFieldDefinitionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -49,5 +50,18 @@ public class TicketFieldDefinitionController {
             Authentication authentication
     ) {
         return ticketFieldDefinitionService.updateStatus(id, request.getActive(), authentication.getName());
+    }
+
+    @PatchMapping("/{id}/dropdown-source")
+    public TicketFieldDefinitionResponse updateDropdownSource(
+            @PathVariable Long id,
+            @RequestBody UpdateTicketFieldDropdownSourceRequest request,
+            Authentication authentication
+    ) {
+        return ticketFieldDefinitionService.updateDropdownSource(
+                id,
+                request.getDropdownSourceId(),
+                authentication.getName()
+        );
     }
 }

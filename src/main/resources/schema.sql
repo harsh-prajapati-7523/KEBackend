@@ -133,6 +133,84 @@ CREATE INDEX IF NOT EXISTS idx_ticket_categories_active ON ticket_categories(act
 
 CREATE INDEX IF NOT EXISTS idx_ticket_categories_sort_order ON ticket_categories(sort_order);
 
+CREATE TABLE IF NOT EXISTS dropdown_sources (
+    id BIGSERIAL PRIMARY KEY,
+    source_key VARCHAR(50) NOT NULL UNIQUE,
+    display_name VARCHAR(80) NOT NULL,
+    source_type VARCHAR(20) NOT NULL DEFAULT 'MANUAL',
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    system_source BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+ALTER TABLE dropdown_sources
+    ALTER COLUMN source_type SET DEFAULT 'MANUAL';
+
+ALTER TABLE dropdown_sources
+    ALTER COLUMN active SET DEFAULT TRUE;
+
+ALTER TABLE dropdown_sources
+    ALTER COLUMN system_source SET DEFAULT FALSE;
+
+ALTER TABLE dropdown_sources
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE dropdown_sources
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE dropdown_sources
+    DROP CONSTRAINT IF EXISTS ck_dropdown_sources_source_key_format;
+
+ALTER TABLE dropdown_sources
+    ADD CONSTRAINT ck_dropdown_sources_source_key_format
+    CHECK (source_key ~ '^[A-Z0-9_]{3,50}$');
+
+ALTER TABLE dropdown_sources
+    DROP CONSTRAINT IF EXISTS ck_dropdown_sources_source_type;
+
+ALTER TABLE dropdown_sources
+    ADD CONSTRAINT ck_dropdown_sources_source_type
+    CHECK (source_type IN ('MANUAL'));
+
+CREATE INDEX IF NOT EXISTS idx_dropdown_sources_active ON dropdown_sources(active);
+
+CREATE TABLE IF NOT EXISTS dropdown_options (
+    id BIGSERIAL PRIMARY KEY,
+    source_id BIGINT NOT NULL,
+    option_key VARCHAR(50) NOT NULL,
+    display_value VARCHAR(120) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INTEGER,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT fk_dropdown_options_source FOREIGN KEY (source_id)
+        REFERENCES dropdown_sources(id),
+    CONSTRAINT uk_dropdown_options_source_option_key UNIQUE (source_id, option_key)
+);
+
+ALTER TABLE dropdown_options
+    ALTER COLUMN active SET DEFAULT TRUE;
+
+ALTER TABLE dropdown_options
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE dropdown_options
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE dropdown_options
+    DROP CONSTRAINT IF EXISTS ck_dropdown_options_option_key_format;
+
+ALTER TABLE dropdown_options
+    ADD CONSTRAINT ck_dropdown_options_option_key_format
+    CHECK (option_key ~ '^[A-Z0-9_]{2,50}$');
+
+CREATE INDEX IF NOT EXISTS idx_dropdown_options_source_id ON dropdown_options(source_id);
+
+CREATE INDEX IF NOT EXISTS idx_dropdown_options_active ON dropdown_options(active);
+
+CREATE INDEX IF NOT EXISTS idx_dropdown_options_sort_order ON dropdown_options(sort_order);
+
 CREATE TABLE IF NOT EXISTS ticket_field_definitions (
     id BIGSERIAL PRIMARY KEY,
     field_key VARCHAR(50) NOT NULL UNIQUE,
@@ -163,6 +241,16 @@ ALTER TABLE ticket_field_definitions
     ALTER COLUMN updated_at SET DEFAULT now();
 
 ALTER TABLE ticket_field_definitions
+    ADD COLUMN IF NOT EXISTS dropdown_source_id BIGINT;
+
+ALTER TABLE ticket_field_definitions
+    DROP CONSTRAINT IF EXISTS fk_ticket_field_definitions_dropdown_source;
+
+ALTER TABLE ticket_field_definitions
+    ADD CONSTRAINT fk_ticket_field_definitions_dropdown_source FOREIGN KEY (dropdown_source_id)
+    REFERENCES dropdown_sources(id);
+
+ALTER TABLE ticket_field_definitions
     DROP CONSTRAINT IF EXISTS ck_ticket_field_definitions_field_key_format;
 
 ALTER TABLE ticket_field_definitions
@@ -175,6 +263,13 @@ ALTER TABLE ticket_field_definitions
 ALTER TABLE ticket_field_definitions
     ADD CONSTRAINT ck_ticket_field_definitions_field_type
     CHECK (field_type IN ('TEXT', 'NUMBER', 'DROPDOWN', 'TEXTAREA'));
+
+ALTER TABLE ticket_field_definitions
+    DROP CONSTRAINT IF EXISTS ck_ticket_field_definitions_dropdown_source_type;
+
+ALTER TABLE ticket_field_definitions
+    ADD CONSTRAINT ck_ticket_field_definitions_dropdown_source_type
+    CHECK (field_type = 'DROPDOWN' OR dropdown_source_id IS NULL);
 
 UPDATE ticket_field_definitions
 SET created_at = now()
@@ -189,6 +284,8 @@ CREATE INDEX IF NOT EXISTS idx_ticket_field_definitions_active ON ticket_field_d
 CREATE INDEX IF NOT EXISTS idx_ticket_field_definitions_field_type ON ticket_field_definitions(field_type);
 
 CREATE INDEX IF NOT EXISTS idx_ticket_field_definitions_sort_order ON ticket_field_definitions(sort_order);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_field_definitions_dropdown_source_id ON ticket_field_definitions(dropdown_source_id);
 
 CREATE TABLE IF NOT EXISTS category_field_configs (
     id BIGSERIAL PRIMARY KEY,

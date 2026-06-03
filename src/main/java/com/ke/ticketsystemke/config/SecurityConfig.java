@@ -78,6 +78,11 @@ public class SecurityConfig {
                         .hasRole("SUPER_ADMIN")
 
                         .requestMatchers(
+                                "/volt/dropdown-sources",
+                                "/volt/dropdown-sources/**")
+                        .hasRole("SUPER_ADMIN")
+
+                        .requestMatchers(
                                 HttpMethod.GET,
                                 "/volt/ticket-categories/*/form-fields")
                         .hasAnyRole(

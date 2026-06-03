@@ -11,6 +11,8 @@ import com.ke.ticketsystemke.dto.TicketDynamicValuesResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.entity.CategoryFieldConfig;
+import com.ke.ticketsystemke.entity.DropdownOption;
+import com.ke.ticketsystemke.entity.DropdownSource;
 import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketCategory;
@@ -21,6 +23,7 @@ import com.ke.ticketsystemke.entity.TicketFieldType;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WarrantyStatus;
 import com.ke.ticketsystemke.repository.CategoryFieldConfigRepository;
+import com.ke.ticketsystemke.repository.DropdownOptionRepository;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
 import com.ke.ticketsystemke.repository.TicketDynamicValueRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
@@ -58,6 +61,7 @@ public class TicketService {
     private final TicketRepository repository;
     private final TicketCategoryRepository ticketCategoryRepository;
     private final CategoryFieldConfigRepository categoryFieldConfigRepository;
+    private final DropdownOptionRepository dropdownOptionRepository;
     private final TicketDynamicValueRepository ticketDynamicValueRepository;
     private final TicketChargeService ticketChargeService;
 
@@ -65,12 +69,14 @@ public class TicketService {
             TicketRepository repository,
             TicketCategoryRepository ticketCategoryRepository,
             CategoryFieldConfigRepository categoryFieldConfigRepository,
+            DropdownOptionRepository dropdownOptionRepository,
             TicketDynamicValueRepository ticketDynamicValueRepository,
             TicketChargeService ticketChargeService
     ) {
         this.repository = repository;
         this.ticketCategoryRepository = ticketCategoryRepository;
         this.categoryFieldConfigRepository = categoryFieldConfigRepository;
+        this.dropdownOptionRepository = dropdownOptionRepository;
         this.ticketDynamicValueRepository = ticketDynamicValueRepository;
         this.ticketChargeService = ticketChargeService;
     }
@@ -509,6 +515,19 @@ public class TicketService {
         if (fieldType == TicketFieldType.NUMBER) {
             BigDecimal numberValue = parseDynamicNumber(trimmedValue, fieldDefinition.getDisplayName());
             return new DynamicValueDraft(config, null, numberValue, numberValue.toPlainString());
+        }
+
+        if (fieldType == TicketFieldType.DROPDOWN) {
+            DropdownSource dropdownSource = fieldDefinition.getDropdownSource();
+            if (dropdownSource == null || !dropdownSource.isActive()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldDefinition.getDisplayName() + " is not available");
+            }
+
+            DropdownOption option = dropdownOptionRepository
+                    .findBySourceIdAndOptionKeyAndActiveTrue(dropdownSource.getId(), trimmedValue)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldDefinition.getDisplayName() + " must use an active option"));
+
+            return new DynamicValueDraft(config, option.getOptionKey(), null, option.getDisplayValue());
         }
 
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported dynamic field type");
