@@ -74,7 +74,8 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 "/volt/workflow/transitions",
-                                "/volt/workflow/transitions/**")
+                                "/volt/workflow/transitions/**",
+                                "/volt/workflow/transition-options")
                         .hasRole("SUPER_ADMIN")
 
                         .requestMatchers(

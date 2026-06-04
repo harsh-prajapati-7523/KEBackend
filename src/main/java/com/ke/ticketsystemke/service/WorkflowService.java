@@ -1,6 +1,8 @@
 package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionRequest;
+import com.ke.ticketsystemke.dto.WorkflowTransitionOptionResponse;
+import com.ke.ticketsystemke.dto.WorkflowTransitionOptionsResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionResponse;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Employee;
@@ -16,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -28,6 +32,15 @@ public class WorkflowService {
             AccessKey.START_WORK,
             AccessKey.COMPLETE_TICKET,
             AccessKey.CANCEL_TICKET
+    );
+    private static final List<SafeTransitionOption> SAFE_TRANSITION_OPTIONS = List.of(
+            new SafeTransitionOption(AccessKey.PICK_TICKET, "Pick Ticket", TicketStatus.NEW, TicketStatus.PICKED),
+            new SafeTransitionOption(AccessKey.PICK_TICKET, "Pick Ticket", TicketStatus.PICKED, TicketStatus.PICKED),
+            new SafeTransitionOption(AccessKey.START_WORK, "Start Work", TicketStatus.PICKED, TicketStatus.IN_PROGRESS),
+            new SafeTransitionOption(AccessKey.COMPLETE_TICKET, "Complete Ticket", TicketStatus.IN_PROGRESS, TicketStatus.COMPLETED),
+            new SafeTransitionOption(AccessKey.CANCEL_TICKET, "Cancel Ticket", TicketStatus.NEW, TicketStatus.CANCELLED),
+            new SafeTransitionOption(AccessKey.CANCEL_TICKET, "Cancel Ticket", TicketStatus.PICKED, TicketStatus.CANCELLED),
+            new SafeTransitionOption(AccessKey.CANCEL_TICKET, "Cancel Ticket", TicketStatus.IN_PROGRESS, TicketStatus.CANCELLED)
     );
 
     private final WorkflowTransitionRepository workflowTransitionRepository;
@@ -72,6 +85,25 @@ public class WorkflowService {
                 .stream()
                 .map(WorkflowTransitionResponse::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public WorkflowTransitionOptionsResponse getTransitionOptions(String employeeId) {
+        Map<TransitionKey, WorkflowTransition> transitionsByKey = new HashMap<>();
+        for (WorkflowTransition transition : workflowTransitionRepository.findAll()) {
+            transitionsByKey.put(
+                    new TransitionKey(transition.getActionKey(), transition.getFromStatus(), transition.getToStatus()),
+                    transition
+            );
+        }
+
+        List<WorkflowTransitionOptionResponse> options = SAFE_TRANSITION_OPTIONS
+                .stream()
+                .map(option -> toOptionResponse(option, transitionsByKey.get(option.key())))
+                .toList();
+
+        log.info("event=workflow_transition_options_returned employeeId={} optionCount={}", employeeId, options.size());
+        return new WorkflowTransitionOptionsResponse(options);
     }
 
     @Transactional
@@ -127,5 +159,42 @@ public class WorkflowService {
 
     private boolean isTerminalStatus(TicketStatus status) {
         return status == TicketStatus.COMPLETED || status == TicketStatus.CANCELLED;
+    }
+
+    private WorkflowTransitionOptionResponse toOptionResponse(
+            SafeTransitionOption option,
+            WorkflowTransition transition
+    ) {
+        return new WorkflowTransitionOptionResponse(
+                option.actionKey(),
+                option.displayName(),
+                option.fromStatus(),
+                option.toStatus(),
+                transition != null,
+                transition == null ? null : transition.getId(),
+                transition == null ? null : transition.isActive(),
+                transition == null ? null : transition.getSortOrder(),
+                transition == null ? null : transition.isSystemTransition(),
+                transition == null ? null : transition.isProtectedTransition()
+        );
+    }
+
+    private record SafeTransitionOption(
+            AccessKey actionKey,
+            String displayName,
+            TicketStatus fromStatus,
+            TicketStatus toStatus
+    ) {
+
+        private TransitionKey key() {
+            return new TransitionKey(actionKey, fromStatus, toStatus);
+        }
+    }
+
+    private record TransitionKey(
+            AccessKey actionKey,
+            TicketStatus fromStatus,
+            TicketStatus toStatus
+    ) {
     }
 }

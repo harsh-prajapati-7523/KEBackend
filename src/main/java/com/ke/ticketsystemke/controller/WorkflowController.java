@@ -1,6 +1,7 @@
 package com.ke.ticketsystemke.controller;
 
 import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionRequest;
+import com.ke.ticketsystemke.dto.WorkflowTransitionOptionsResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionResponse;
 import com.ke.ticketsystemke.service.WorkflowService;
 import jakarta.validation.Valid;
@@ -27,6 +28,11 @@ public class WorkflowController {
     @GetMapping("/transitions")
     public List<WorkflowTransitionResponse> listTransitions() {
         return workflowService.listTransitions();
+    }
+
+    @GetMapping("/transition-options")
+    public WorkflowTransitionOptionsResponse getTransitionOptions(Authentication authentication) {
+        return workflowService.getTransitionOptions(authentication.getName());
     }
 
     @PatchMapping("/transitions/{id}")
