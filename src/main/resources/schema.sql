@@ -274,6 +274,78 @@ SET
     protected_transition = TRUE,
     updated_at = now();
 
+CREATE TABLE IF NOT EXISTS workflow_statuses (
+    id BIGSERIAL PRIMARY KEY,
+    status_key VARCHAR(50) NOT NULL UNIQUE,
+    display_name VARCHAR(80) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    system_status BOOLEAN NOT NULL DEFAULT FALSE,
+    protected_status BOOLEAN NOT NULL DEFAULT FALSE,
+    terminal BOOLEAN NOT NULL DEFAULT FALSE,
+    sort_order INTEGER,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_by_employee_id BIGINT,
+    CONSTRAINT fk_workflow_statuses_updated_by_employee FOREIGN KEY (updated_by_employee_id)
+        REFERENCES employees(id)
+);
+
+ALTER TABLE workflow_statuses
+    ALTER COLUMN active SET DEFAULT TRUE;
+
+ALTER TABLE workflow_statuses
+    ALTER COLUMN system_status SET DEFAULT FALSE;
+
+ALTER TABLE workflow_statuses
+    ALTER COLUMN protected_status SET DEFAULT FALSE;
+
+ALTER TABLE workflow_statuses
+    ALTER COLUMN terminal SET DEFAULT FALSE;
+
+ALTER TABLE workflow_statuses
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE workflow_statuses
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE workflow_statuses
+    DROP CONSTRAINT IF EXISTS ck_workflow_statuses_status_key_format;
+
+ALTER TABLE workflow_statuses
+    ADD CONSTRAINT ck_workflow_statuses_status_key_format
+    CHECK (status_key ~ '^[A-Z0-9_]{2,50}$');
+
+CREATE INDEX IF NOT EXISTS idx_workflow_statuses_active ON workflow_statuses(active);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_statuses_sort_order ON workflow_statuses(sort_order);
+
+INSERT INTO workflow_statuses (
+    status_key,
+    display_name,
+    active,
+    system_status,
+    protected_status,
+    terminal,
+    sort_order,
+    created_at,
+    updated_at
+)
+VALUES
+    ('NEW', 'New', TRUE, TRUE, TRUE, FALSE, 10, now(), now()),
+    ('PICKED', 'Picked', TRUE, TRUE, TRUE, FALSE, 20, now(), now()),
+    ('IN_PROGRESS', 'In Progress', TRUE, TRUE, TRUE, FALSE, 30, now(), now()),
+    ('COMPLETED', 'Completed', TRUE, TRUE, TRUE, TRUE, 40, now(), now()),
+    ('CANCELLED', 'Cancelled', TRUE, TRUE, TRUE, TRUE, 50, now(), now())
+ON CONFLICT (status_key) DO UPDATE
+SET
+    display_name = EXCLUDED.display_name,
+    active = TRUE,
+    system_status = TRUE,
+    protected_status = TRUE,
+    terminal = EXCLUDED.terminal,
+    sort_order = EXCLUDED.sort_order,
+    updated_at = now();
+
 CREATE TABLE IF NOT EXISTS ticket_categories (
     id BIGSERIAL PRIMARY KEY,
     category_key VARCHAR(40) NOT NULL UNIQUE,
