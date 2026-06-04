@@ -4,6 +4,7 @@ import com.ke.ticketsystemke.dto.CancelTicketRequest;
 import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
+import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValuesResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
@@ -93,6 +94,17 @@ public class TicketController {
         accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
         log.info("event=ticket_dynamic_values_requested employeeId={} ticketId={}", employeeId, id);
         return service.getDynamicValues(id, employeeId);
+    }
+
+    @GetMapping("/{id}/available-actions")
+    public TicketAvailableActionsResponse getAvailableActions(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        String role = extractRole(authentication);
+        log.info("event=ticket_available_actions_requested employeeId={} ticketId={}", employeeId, id);
+        return service.getAvailableActions(id, employeeId, role);
     }
 
     @GetMapping("/search")

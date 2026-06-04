@@ -6,6 +6,8 @@ import com.ke.ticketsystemke.dto.CreateTicketDynamicValueRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
 import com.ke.ticketsystemke.dto.CustomerHistoryTicketResponse;
+import com.ke.ticketsystemke.dto.TicketActionAvailabilityResponse;
+import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValueResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValuesResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
@@ -47,6 +49,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +61,13 @@ public class TicketService {
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
     private static final int DYNAMIC_TEXT_MAX_LENGTH = 255;
     private static final int DYNAMIC_TEXTAREA_MAX_LENGTH = 1000;
+    private static final String ROLE_ACCESS_DENIED = "ROLE_ACCESS_DENIED";
+    private static final String WORKFLOW_TRANSITION_INACTIVE = "WORKFLOW_TRANSITION_INACTIVE";
+    private static final String STATUS_NOT_ALLOWED = "STATUS_NOT_ALLOWED";
+    private static final String OWNER_REQUIRED = "OWNER_REQUIRED";
+    private static final String ADMIN_REQUIRED = "ADMIN_REQUIRED";
+    private static final String WARRANTY_NOT_CHECKED = "WARRANTY_NOT_CHECKED";
+    private static final String TERMINAL_STATUS = "TERMINAL_STATUS";
 
     private final TicketRepository repository;
     private final TicketCategoryRepository ticketCategoryRepository;
@@ -66,6 +76,7 @@ public class TicketService {
     private final TicketDynamicValueRepository ticketDynamicValueRepository;
     private final TicketChargeService ticketChargeService;
     private final WorkflowService workflowService;
+    private final AccessService accessService;
 
     public TicketService(
             TicketRepository repository,
@@ -74,7 +85,8 @@ public class TicketService {
             DropdownOptionRepository dropdownOptionRepository,
             TicketDynamicValueRepository ticketDynamicValueRepository,
             TicketChargeService ticketChargeService,
-            WorkflowService workflowService
+            WorkflowService workflowService,
+            AccessService accessService
     ) {
         this.repository = repository;
         this.ticketCategoryRepository = ticketCategoryRepository;
@@ -83,6 +95,7 @@ public class TicketService {
         this.ticketDynamicValueRepository = ticketDynamicValueRepository;
         this.ticketChargeService = ticketChargeService;
         this.workflowService = workflowService;
+        this.accessService = accessService;
     }
 
     @Transactional
@@ -122,6 +135,28 @@ public class TicketService {
         Ticket saved = repository.save(ticket);
         saveDynamicValues(saved, dynamicValueDrafts);
         return TicketResponse.from(saved, BigDecimal.ZERO.setScale(2));
+    }
+
+    @Transactional(readOnly = true)
+    public TicketAvailableActionsResponse getAvailableActions(
+            Long ticketId,
+            String employeeId,
+            String role
+    ) {
+        Ticket ticket = repository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"
+                ));
+
+        Map<AccessKey, TicketActionAvailabilityResponse> actions = new EnumMap<>(AccessKey.class);
+        actions.put(AccessKey.PICK_TICKET, evaluatePickAvailability(ticket, employeeId));
+        actions.put(AccessKey.START_WORK, evaluateStartWorkAvailability(ticket, employeeId));
+        actions.put(AccessKey.COMPLETE_TICKET, evaluateCompleteAvailability(ticket, employeeId, role));
+        actions.put(AccessKey.CANCEL_TICKET, evaluateCancelAvailability(ticket, employeeId, role));
+
+        log.info("event=ticket_available_actions_returned employeeId={} ticketId={}", employeeId, ticketId);
+        return new TicketAvailableActionsResponse(ticket.getId(), actions);
     }
 
     @Transactional
@@ -341,6 +376,136 @@ public class TicketService {
 
     private boolean isOperationalRole(String role) {
         return isAdminRole(role) || "EMPLOYEE".equals(role) || "TECHNICIAN".equals(role);
+    }
+
+    private TicketActionAvailabilityResponse evaluatePickAvailability(Ticket ticket, String employeeId) {
+        TicketStatus status = ticket.getStatus();
+        TicketStatus targetStatus = status == TicketStatus.NEW || status == TicketStatus.PICKED
+                ? TicketStatus.PICKED
+                : null;
+        return evaluateWorkflowAvailability(
+                ticket,
+                employeeId,
+                AccessKey.PICK_TICKET,
+                targetStatus,
+                null
+        );
+    }
+
+    private TicketActionAvailabilityResponse evaluateStartWorkAvailability(Ticket ticket, String employeeId) {
+        TicketStatus targetStatus = ticket.getStatus() == TicketStatus.PICKED
+                ? TicketStatus.IN_PROGRESS
+                : null;
+        return evaluateWorkflowAvailability(
+                ticket,
+                employeeId,
+                AccessKey.START_WORK,
+                targetStatus,
+                null
+        );
+    }
+
+    private TicketActionAvailabilityResponse evaluateCompleteAvailability(Ticket ticket, String employeeId, String role) {
+        TicketActionAvailabilityResponse baseAvailability = evaluateWorkflowAvailability(
+                ticket,
+                employeeId,
+                AccessKey.COMPLETE_TICKET,
+                ticket.getStatus() == TicketStatus.IN_PROGRESS ? TicketStatus.COMPLETED : null,
+                null
+        );
+        if (!baseAvailability.available()) {
+            return baseAvailability;
+        }
+
+        boolean isTicketOwner = employeeId != null && employeeId.equals(ticket.getPickedByEmployeeId());
+        if (!isAdminRole(role) && !isTicketOwner) {
+            return unavailable(
+                    OWNER_REQUIRED,
+                    "Only the assigned technician or admin can complete this ticket."
+            );
+        }
+
+        if (ticket.getWarrantyStatus() == WarrantyStatus.NOT_CHECKED) {
+            return unavailable(
+                    WARRANTY_NOT_CHECKED,
+                    "Warranty must be checked before completing the ticket."
+            );
+        }
+
+        return available();
+    }
+
+    private TicketActionAvailabilityResponse evaluateCancelAvailability(Ticket ticket, String employeeId, String role) {
+        TicketActionAvailabilityResponse baseAvailability = evaluateWorkflowAvailability(
+                ticket,
+                employeeId,
+                AccessKey.CANCEL_TICKET,
+                canCancelFromStatus(ticket.getStatus()) ? TicketStatus.CANCELLED : null,
+                null
+        );
+        if (!baseAvailability.available()) {
+            return baseAvailability;
+        }
+
+        if (!isAdminRole(role)) {
+            return unavailable(
+                    ADMIN_REQUIRED,
+                    "Only an admin can cancel this ticket."
+            );
+        }
+
+        return available();
+    }
+
+    private TicketActionAvailabilityResponse evaluateWorkflowAvailability(
+            Ticket ticket,
+            String employeeId,
+            AccessKey actionKey,
+            TicketStatus targetStatus,
+            String statusMessage
+    ) {
+        if (!accessService.isAllowed(employeeId, actionKey)) {
+            return unavailable(
+                    ROLE_ACCESS_DENIED,
+                    "You do not have access to perform this action."
+            );
+        }
+
+        TicketStatus status = ticket.getStatus();
+        if (status == TicketStatus.COMPLETED || status == TicketStatus.CANCELLED) {
+            return unavailable(
+                    TERMINAL_STATUS,
+                    "Completed and cancelled tickets are terminal."
+            );
+        }
+
+        if (targetStatus == null) {
+            return unavailable(
+                    STATUS_NOT_ALLOWED,
+                    statusMessage != null ? statusMessage : "This action is not available for the current ticket status."
+            );
+        }
+
+        if (!workflowService.isTransitionAllowed(actionKey, status, targetStatus)) {
+            return unavailable(
+                    WORKFLOW_TRANSITION_INACTIVE,
+                    "This action is disabled for the current workflow status."
+            );
+        }
+
+        return available();
+    }
+
+    private boolean canCancelFromStatus(TicketStatus status) {
+        return status == TicketStatus.NEW || status == TicketStatus.PICKED || status == TicketStatus.IN_PROGRESS;
+    }
+
+    private TicketActionAvailabilityResponse available() {
+        return new TicketActionAvailabilityResponse(true, null, null);
+    }
+
+    private TicketActionAvailabilityResponse unavailable(String reasonCode, String message) {
+        return new TicketActionAvailabilityResponse(false, reasonCode, message);
     }
 
     public List<TicketResponse> listTickets() {
