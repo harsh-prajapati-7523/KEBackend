@@ -76,6 +76,7 @@ public class SecurityConfig {
                                 "/volt/workflow/transitions",
                                 "/volt/workflow/transitions/**",
                                 "/volt/workflow/transition-options",
+                                "/volt/workflow/actions",
                                 "/volt/workflow/statuses",
                                 "/volt/workflow/statuses/**")
                         .hasRole("SUPER_ADMIN")

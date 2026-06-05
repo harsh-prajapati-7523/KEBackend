@@ -274,6 +274,71 @@ SET
     protected_transition = TRUE,
     updated_at = now();
 
+CREATE TABLE IF NOT EXISTS workflow_actions (
+    id BIGSERIAL PRIMARY KEY,
+    action_key VARCHAR(60) NOT NULL UNIQUE,
+    display_name VARCHAR(80) NOT NULL,
+    button_label VARCHAR(80) NOT NULL,
+    description VARCHAR(255),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    system_action BOOLEAN NOT NULL DEFAULT FALSE,
+    protected_action BOOLEAN NOT NULL DEFAULT FALSE,
+    sort_order INTEGER,
+    requires_comment BOOLEAN NOT NULL DEFAULT FALSE,
+    confirmation_required BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_by_employee_id BIGINT,
+    CONSTRAINT fk_workflow_actions_updated_by_employee FOREIGN KEY (updated_by_employee_id)
+        REFERENCES employees(id),
+    CONSTRAINT ck_workflow_actions_action_key_format CHECK (action_key ~ '^[A-Z0-9_]{2,60}$')
+);
+
+ALTER TABLE workflow_actions
+    ALTER COLUMN active SET DEFAULT TRUE;
+
+ALTER TABLE workflow_actions
+    ALTER COLUMN system_action SET DEFAULT FALSE;
+
+ALTER TABLE workflow_actions
+    ALTER COLUMN protected_action SET DEFAULT FALSE;
+
+ALTER TABLE workflow_actions
+    ALTER COLUMN requires_comment SET DEFAULT FALSE;
+
+ALTER TABLE workflow_actions
+    ALTER COLUMN confirmation_required SET DEFAULT FALSE;
+
+ALTER TABLE workflow_actions
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE workflow_actions
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS idx_workflow_actions_sort_key
+    ON workflow_actions(sort_order, action_key);
+
+INSERT INTO workflow_actions (
+    action_key,
+    display_name,
+    button_label,
+    description,
+    active,
+    system_action,
+    protected_action,
+    sort_order,
+    requires_comment,
+    confirmation_required,
+    created_at,
+    updated_at
+)
+VALUES
+    ('PICK_TICKET', 'Pick Ticket', 'Pick Ticket', 'Pick or take ownership of a new/picked ticket.', TRUE, TRUE, TRUE, 10, FALSE, FALSE, now(), now()),
+    ('START_WORK', 'Start Work', 'Start Work', 'Move a picked ticket into work in progress.', TRUE, TRUE, TRUE, 20, FALSE, FALSE, now(), now()),
+    ('COMPLETE_TICKET', 'Complete Ticket', 'Complete Ticket', 'Complete an in-progress ticket after required checks.', TRUE, TRUE, TRUE, 30, FALSE, FALSE, now(), now()),
+    ('CANCEL_TICKET', 'Cancel Ticket', 'Cancel Ticket', 'Cancel an eligible ticket.', TRUE, TRUE, TRUE, 40, FALSE, FALSE, now(), now())
+ON CONFLICT (action_key) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS workflow_statuses (
     id BIGSERIAL PRIMARY KEY,
     status_key VARCHAR(50) NOT NULL UNIQUE,
