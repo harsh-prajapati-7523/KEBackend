@@ -46,6 +46,14 @@ public class WorkflowTransition {
     @Column(name = "to_status", nullable = false, length = 30)
     private TicketStatus toStatus;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "from_status_id")
+    private WorkflowStatus fromStatusRecord;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "to_status_id")
+    private WorkflowStatus toStatusRecord;
+
     @Column(nullable = false)
     private boolean active = true;
 
@@ -102,6 +110,22 @@ public class WorkflowTransition {
 
     public void setToStatus(TicketStatus toStatus) {
         this.toStatus = toStatus;
+    }
+
+    public WorkflowStatus getFromStatusRecord() {
+        return fromStatusRecord;
+    }
+
+    public void setFromStatusRecord(WorkflowStatus fromStatusRecord) {
+        this.fromStatusRecord = fromStatusRecord;
+    }
+
+    public WorkflowStatus getToStatusRecord() {
+        return toStatusRecord;
+    }
+
+    public void setToStatusRecord(WorkflowStatus toStatusRecord) {
+        this.toStatusRecord = toStatusRecord;
     }
 
     public boolean isActive() {

@@ -9,8 +9,10 @@ import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WorkflowTransition;
+import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
+import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -46,13 +48,16 @@ public class WorkflowService {
 
     private final WorkflowTransitionRepository workflowTransitionRepository;
     private final EmployeeRepository employeeRepository;
+    private final WorkflowStatusRepository workflowStatusRepository;
 
     public WorkflowService(
             WorkflowTransitionRepository workflowTransitionRepository,
-            EmployeeRepository employeeRepository
+            EmployeeRepository employeeRepository,
+            WorkflowStatusRepository workflowStatusRepository
     ) {
         this.workflowTransitionRepository = workflowTransitionRepository;
         this.employeeRepository = employeeRepository;
+        this.workflowStatusRepository = workflowStatusRepository;
     }
 
     @Transactional(readOnly = true)
@@ -153,6 +158,8 @@ public class WorkflowService {
         transition.setDisplayName(displayName);
         transition.setFromStatus(request.getFromStatus());
         transition.setToStatus(request.getToStatus());
+        transition.setFromStatusRecord(resolveWorkflowStatusForTicketStatus(request.getFromStatus()));
+        transition.setToStatusRecord(resolveWorkflowStatusForTicketStatus(request.getToStatus()));
         transition.setActive(request.getActive() == null || request.getActive());
         transition.setSortOrder(request.getSortOrder() == null ? safeOption.sortOrder() : request.getSortOrder());
         transition.setSystemTransition(false);
@@ -222,6 +229,26 @@ public class WorkflowService {
 
     private boolean isTerminalStatus(TicketStatus status) {
         return status == TicketStatus.COMPLETED || status == TicketStatus.CANCELLED;
+    }
+
+    private WorkflowStatus resolveWorkflowStatusForTicketStatus(TicketStatus status) {
+        WorkflowStatus workflowStatus = workflowStatusRepository.findByStatusKey(status.name())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Workflow status metadata missing for transition status " + status.name()
+                ));
+
+        if (!workflowStatus.isSystemStatus()
+                || !workflowStatus.isProtectedStatus()
+                || !workflowStatus.isActive()
+                || !status.name().equals(workflowStatus.getStatusKey())) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Workflow status metadata is invalid for transition status " + status.name()
+            );
+        }
+
+        return workflowStatus;
     }
 
     private SafeTransitionOption findSafeTransitionOption(

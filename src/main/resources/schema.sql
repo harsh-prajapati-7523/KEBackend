@@ -346,6 +346,50 @@ SET
     sort_order = EXCLUDED.sort_order,
     updated_at = now();
 
+ALTER TABLE workflow_transitions
+    ADD COLUMN IF NOT EXISTS from_status_id BIGINT;
+
+ALTER TABLE workflow_transitions
+    ADD COLUMN IF NOT EXISTS to_status_id BIGINT;
+
+UPDATE workflow_transitions wt
+SET from_status_id = ws.id
+FROM workflow_statuses ws
+WHERE wt.from_status_id IS NULL
+  AND wt.from_status = ws.status_key
+  AND ws.status_key IN ('NEW', 'PICKED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')
+  AND ws.system_status = TRUE
+  AND ws.protected_status = TRUE;
+
+UPDATE workflow_transitions wt
+SET to_status_id = ws.id
+FROM workflow_statuses ws
+WHERE wt.to_status_id IS NULL
+  AND wt.to_status = ws.status_key
+  AND ws.status_key IN ('NEW', 'PICKED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')
+  AND ws.system_status = TRUE
+  AND ws.protected_status = TRUE;
+
+ALTER TABLE workflow_transitions
+    DROP CONSTRAINT IF EXISTS fk_workflow_transitions_from_status;
+
+ALTER TABLE workflow_transitions
+    ADD CONSTRAINT fk_workflow_transitions_from_status FOREIGN KEY (from_status_id)
+    REFERENCES workflow_statuses(id);
+
+ALTER TABLE workflow_transitions
+    DROP CONSTRAINT IF EXISTS fk_workflow_transitions_to_status;
+
+ALTER TABLE workflow_transitions
+    ADD CONSTRAINT fk_workflow_transitions_to_status FOREIGN KEY (to_status_id)
+    REFERENCES workflow_statuses(id);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_transitions_from_status_id
+    ON workflow_transitions(from_status_id);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_transitions_to_status_id
+    ON workflow_transitions(to_status_id);
+
 ALTER TABLE tickets
     ADD COLUMN IF NOT EXISTS status_id BIGINT;
 
