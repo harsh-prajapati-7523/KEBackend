@@ -538,6 +538,7 @@ public class TicketService {
         return new TicketActionAvailabilityResponse(false, reasonCode, message);
     }
 
+    @Transactional(readOnly = true)
     public List<TicketResponse> listTickets() {
         List<TicketResponse> list = repository.findAllByOrderByCreatedAtDesc()
             .stream()

@@ -6,10 +6,12 @@ import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.WarrantyStatus;
+import com.ke.ticketsystemke.entity.WorkflowStatus;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.Locale;
 
 public record TicketResponse(
         Long id,
@@ -24,6 +26,11 @@ public record TicketResponse(
         String categoryDisplayName,
         String complaintDescription,
         TicketStatus status,
+        Long statusId,
+        String statusKey,
+        String statusDisplayName,
+        Boolean statusActive,
+        Boolean statusTerminal,
         Instant createdAt,
         Instant updatedAt,
         String createdByEmployeeId,
@@ -50,6 +57,7 @@ public record TicketResponse(
 
     public static TicketResponse from(Ticket ticket, BigDecimal totalCharge) {
         TicketCategoryConfig categoryRecord = ticket.getCategoryRecord();
+        WorkflowStatus statusRecord = ticket.getStatusRecord();
         String categoryKey = categoryRecord != null ? categoryRecord.getCategoryKey() : fallbackCategoryKey(ticket.getCategory());
         return new TicketResponse(
                 ticket.getId(),
@@ -64,6 +72,11 @@ public record TicketResponse(
                 categoryRecord != null ? categoryRecord.getDisplayName() : null,
                 ticket.getComplaintDescription(),
                 ticket.getStatus(),
+                statusRecord != null ? statusRecord.getId() : null,
+                statusRecord != null ? statusRecord.getStatusKey() : fallbackStatusKey(ticket.getStatus()),
+                statusRecord != null ? statusRecord.getDisplayName() : fallbackStatusDisplayName(ticket.getStatus()),
+                statusRecord != null ? statusRecord.isActive() : Boolean.TRUE,
+                statusRecord != null ? statusRecord.isTerminal() : fallbackStatusTerminal(ticket.getStatus()),
                 ticket.getCreatedAt(),
                 ticket.getUpdatedAt(),
                 ticket.getCreatedByEmployeeId(),
@@ -87,5 +100,35 @@ public record TicketResponse(
 
     private static String fallbackCategoryKey(TicketCategory category) {
         return category == null ? null : category.name();
+    }
+
+    private static String fallbackStatusKey(TicketStatus status) {
+        return status == null ? null : status.name();
+    }
+
+    private static String fallbackStatusDisplayName(TicketStatus status) {
+        if (status == null) {
+            return null;
+        }
+
+        String[] words = status.name().toLowerCase(Locale.ROOT).split("_");
+        StringBuilder displayName = new StringBuilder();
+        for (String word : words) {
+            if (word.isEmpty()) {
+                continue;
+            }
+            if (!displayName.isEmpty()) {
+                displayName.append(' ');
+            }
+            displayName.append(Character.toUpperCase(word.charAt(0)));
+            if (word.length() > 1) {
+                displayName.append(word.substring(1));
+            }
+        }
+        return displayName.toString();
+    }
+
+    private static Boolean fallbackStatusTerminal(TicketStatus status) {
+        return status == TicketStatus.COMPLETED || status == TicketStatus.CANCELLED;
     }
 }
