@@ -380,6 +380,22 @@ ALTER TABLE workflow_statuses
     ADD CONSTRAINT ck_workflow_statuses_status_key_format
     CHECK (status_key ~ '^[A-Z0-9_]{2,50}$');
 
+ALTER TABLE workflow_statuses
+    ADD COLUMN IF NOT EXISTS behavior_bucket VARCHAR(30);
+
+ALTER TABLE workflow_statuses
+    DROP CONSTRAINT IF EXISTS ck_workflow_statuses_behavior_bucket;
+
+ALTER TABLE workflow_statuses
+    ADD CONSTRAINT ck_workflow_statuses_behavior_bucket
+    CHECK (behavior_bucket IS NULL OR behavior_bucket IN (
+        'NEW',
+        'PICKED',
+        'IN_PROGRESS',
+        'COMPLETED',
+        'CANCELLED'
+    ));
+
 CREATE INDEX IF NOT EXISTS idx_workflow_statuses_active ON workflow_statuses(active);
 
 CREATE INDEX IF NOT EXISTS idx_workflow_statuses_sort_order ON workflow_statuses(sort_order);
@@ -391,16 +407,17 @@ INSERT INTO workflow_statuses (
     system_status,
     protected_status,
     terminal,
+    behavior_bucket,
     sort_order,
     created_at,
     updated_at
 )
 VALUES
-    ('NEW', 'New', TRUE, TRUE, TRUE, FALSE, 10, now(), now()),
-    ('PICKED', 'Picked', TRUE, TRUE, TRUE, FALSE, 20, now(), now()),
-    ('IN_PROGRESS', 'In Progress', TRUE, TRUE, TRUE, FALSE, 30, now(), now()),
-    ('COMPLETED', 'Completed', TRUE, TRUE, TRUE, TRUE, 40, now(), now()),
-    ('CANCELLED', 'Cancelled', TRUE, TRUE, TRUE, TRUE, 50, now(), now())
+    ('NEW', 'New', TRUE, TRUE, TRUE, FALSE, 'NEW', 10, now(), now()),
+    ('PICKED', 'Picked', TRUE, TRUE, TRUE, FALSE, 'PICKED', 20, now(), now()),
+    ('IN_PROGRESS', 'In Progress', TRUE, TRUE, TRUE, FALSE, 'IN_PROGRESS', 30, now(), now()),
+    ('COMPLETED', 'Completed', TRUE, TRUE, TRUE, TRUE, 'COMPLETED', 40, now(), now()),
+    ('CANCELLED', 'Cancelled', TRUE, TRUE, TRUE, TRUE, 'CANCELLED', 50, now(), now())
 ON CONFLICT (status_key) DO UPDATE
 SET
     display_name = EXCLUDED.display_name,
@@ -408,6 +425,7 @@ SET
     system_status = TRUE,
     protected_status = TRUE,
     terminal = EXCLUDED.terminal,
+    behavior_bucket = EXCLUDED.behavior_bucket,
     sort_order = EXCLUDED.sort_order,
     updated_at = now();
 

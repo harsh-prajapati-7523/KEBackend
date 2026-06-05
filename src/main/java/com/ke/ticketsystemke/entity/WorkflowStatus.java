@@ -2,6 +2,8 @@ package com.ke.ticketsystemke.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -39,6 +41,10 @@ public class WorkflowStatus {
 
     @Column(nullable = false)
     private boolean terminal = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "behavior_bucket", length = 30)
+    private TicketStatus behaviorBucket;
 
     @Column(name = "sort_order")
     private Integer sortOrder;
@@ -103,6 +109,14 @@ public class WorkflowStatus {
 
     public void setTerminal(boolean terminal) {
         this.terminal = terminal;
+    }
+
+    public TicketStatus getBehaviorBucket() {
+        return behaviorBucket;
+    }
+
+    public void setBehaviorBucket(TicketStatus behaviorBucket) {
+        this.behaviorBucket = behaviorBucket;
     }
 
     public Integer getSortOrder() {

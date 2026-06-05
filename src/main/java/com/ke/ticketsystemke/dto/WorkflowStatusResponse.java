@@ -1,6 +1,7 @@
 package com.ke.ticketsystemke.dto;
 
 import com.ke.ticketsystemke.entity.WorkflowStatus;
+import com.ke.ticketsystemke.entity.TicketStatus;
 
 import java.time.Instant;
 
@@ -12,6 +13,7 @@ public record WorkflowStatusResponse(
         boolean systemStatus,
         boolean protectedStatus,
         boolean terminal,
+        TicketStatus behaviorBucket,
         Integer sortOrder,
         Instant createdAt,
         Instant updatedAt
@@ -26,6 +28,7 @@ public record WorkflowStatusResponse(
                 status.isSystemStatus(),
                 status.isProtectedStatus(),
                 status.isTerminal(),
+                status.getBehaviorBucket(),
                 status.getSortOrder(),
                 status.getCreatedAt(),
                 status.getUpdatedAt()
