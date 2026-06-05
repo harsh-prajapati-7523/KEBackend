@@ -7,6 +7,7 @@ import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
 import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValuesResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
+import com.ke.ticketsystemke.dto.TicketStatusFilterOptionResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.service.AccessService;
@@ -72,6 +73,14 @@ public class TicketController {
         List<TicketResponse> list = service.listTickets();
         log.info("event=ticket_list_returned count={}", list.size());
         return list;
+    }
+
+    @GetMapping("/status-filter-options")
+    public List<TicketStatusFilterOptionResponse> getStatusFilterOptions(Authentication authentication) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.USE_TICKET_FILTERS);
+        log.info("event=ticket_status_filter_options_requested employeeId={}", employeeId);
+        return service.getTicketStatusFilterOptions(employeeId);
     }
 
     @GetMapping("/{id}/customer-history")
