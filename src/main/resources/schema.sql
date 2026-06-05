@@ -346,6 +346,28 @@ SET
     sort_order = EXCLUDED.sort_order,
     updated_at = now();
 
+ALTER TABLE tickets
+    ADD COLUMN IF NOT EXISTS status_id BIGINT;
+
+UPDATE tickets t
+SET status_id = ws.id
+FROM workflow_statuses ws
+WHERE t.status_id IS NULL
+  AND t.status = ws.status_key
+  AND ws.status_key IN ('NEW', 'PICKED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')
+  AND ws.system_status = TRUE
+  AND ws.protected_status = TRUE
+  AND ws.active = TRUE;
+
+ALTER TABLE tickets
+    DROP CONSTRAINT IF EXISTS fk_tickets_status;
+
+ALTER TABLE tickets
+    ADD CONSTRAINT fk_tickets_status FOREIGN KEY (status_id)
+    REFERENCES workflow_statuses(id);
+
+CREATE INDEX IF NOT EXISTS idx_tickets_status_id ON tickets(status_id);
+
 CREATE TABLE IF NOT EXISTS ticket_categories (
     id BIGSERIAL PRIMARY KEY,
     category_key VARCHAR(40) NOT NULL UNIQUE,

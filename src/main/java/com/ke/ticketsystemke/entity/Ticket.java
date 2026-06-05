@@ -43,6 +43,10 @@ public class Ticket {
     @Column(nullable = false)
     private TicketStatus status;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "status_id")
+    private WorkflowStatus statusRecord;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

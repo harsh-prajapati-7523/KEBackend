@@ -25,12 +25,14 @@ import com.ke.ticketsystemke.entity.TicketFieldDefinition;
 import com.ke.ticketsystemke.entity.TicketFieldType;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WarrantyStatus;
+import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.repository.CategoryFieldConfigRepository;
 import com.ke.ticketsystemke.repository.DropdownOptionRepository;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
 import com.ke.ticketsystemke.repository.TicketDynamicValueRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.TicketSpecifications;
+import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -77,6 +79,7 @@ public class TicketService {
     private final TicketChargeService ticketChargeService;
     private final WorkflowService workflowService;
     private final AccessService accessService;
+    private final WorkflowStatusRepository workflowStatusRepository;
 
     public TicketService(
             TicketRepository repository,
@@ -86,7 +89,8 @@ public class TicketService {
             TicketDynamicValueRepository ticketDynamicValueRepository,
             TicketChargeService ticketChargeService,
             WorkflowService workflowService,
-            AccessService accessService
+            AccessService accessService,
+            WorkflowStatusRepository workflowStatusRepository
     ) {
         this.repository = repository;
         this.ticketCategoryRepository = ticketCategoryRepository;
@@ -96,6 +100,7 @@ public class TicketService {
         this.ticketChargeService = ticketChargeService;
         this.workflowService = workflowService;
         this.accessService = accessService;
+        this.workflowStatusRepository = workflowStatusRepository;
     }
 
     @Transactional
@@ -118,6 +123,7 @@ public class TicketService {
         assignCategory(ticket, category);
         ticket.setComplaintDescription(request.getComplaintDescription().trim());
         ticket.setStatus(TicketStatus.NEW);
+        ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.NEW));
         ticket.setCreatedByEmployeeId(createdByEmployeeId);
         validateWarrantyDetails(
                 request.getWarrantyStatus(),
@@ -175,6 +181,7 @@ public class TicketService {
             workflowService.requireTransitionAllowed(AccessKey.PICK_TICKET, status, TicketStatus.PICKED);
             String previousOwner = ticket.getPickedByEmployeeId();
             ticket.setStatus(TicketStatus.PICKED);
+            ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.PICKED));
             ticket.setPickedByEmployeeId(employeeId);
             Ticket saved = repository.save(ticket);
             TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
@@ -203,6 +210,7 @@ public class TicketService {
         if (ticket.getStatus() == TicketStatus.PICKED) {
             workflowService.requireTransitionAllowed(AccessKey.START_WORK, TicketStatus.PICKED, TicketStatus.IN_PROGRESS);
             ticket.setStatus(TicketStatus.IN_PROGRESS);
+            ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.IN_PROGRESS));
             String previousOwner = ticket.getPickedByEmployeeId();
             ticket.setPickedByEmployeeId(employeeId);
             Ticket saved = repository.save(ticket);
@@ -259,6 +267,7 @@ public class TicketService {
         }
 
         ticket.setStatus(TicketStatus.COMPLETED);
+        ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.COMPLETED));
         ticket.setCompletedAt(Instant.now());
         ticket.setCompletedByEmployeeId(employeeId);
         ticket.setCompletionRemark(trimToNull(request.getCompletionRemark()));
@@ -356,6 +365,7 @@ public class TicketService {
         TicketStatus previousStatus = ticket.getStatus();
         workflowService.requireTransitionAllowed(AccessKey.CANCEL_TICKET, previousStatus, TicketStatus.CANCELLED);
         ticket.setStatus(TicketStatus.CANCELLED);
+        ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.CANCELLED));
         ticket.setCancelledAt(Instant.now());
         ticket.setCancelledByEmployeeId(employeeId);
         ticket.setCancellationReason(request.getCancellationReason().trim());
@@ -364,6 +374,26 @@ public class TicketService {
         TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
         log.info("event=ticket_cancelled ticketId={} ticketNumber={} employeeId={} statusTransition={}->CANCELLED", ticketId, ticket.getTicketNumber(), employeeId, previousStatus);
         return resp;
+    }
+
+    private WorkflowStatus resolveWorkflowStatusForTicketStatus(TicketStatus status) {
+        WorkflowStatus workflowStatus = workflowStatusRepository.findByStatusKey(status.name())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Workflow status metadata missing for ticket status " + status.name()
+                ));
+
+        if (!workflowStatus.isSystemStatus()
+                || !workflowStatus.isProtectedStatus()
+                || !workflowStatus.isActive()
+                || !status.name().equals(workflowStatus.getStatusKey())) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Workflow status metadata is invalid for ticket status " + status.name()
+            );
+        }
+
+        return workflowStatus;
     }
 
     private boolean isAdminRole(String role) {
