@@ -7,6 +7,7 @@ import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.WarrantyStatus;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
+import com.ke.ticketsystemke.service.ResolvedTicketStatus;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -56,8 +57,12 @@ public record TicketResponse(
     }
 
     public static TicketResponse from(Ticket ticket, BigDecimal totalCharge) {
+        return from(ticket, totalCharge, null);
+    }
+
+    public static TicketResponse from(Ticket ticket, BigDecimal totalCharge, ResolvedTicketStatus resolvedStatus) {
         TicketCategoryConfig categoryRecord = ticket.getCategoryRecord();
-        WorkflowStatus statusRecord = ticket.getStatusRecord();
+        StatusMetadata statusMetadata = resolveStatusMetadata(ticket, resolvedStatus);
         String categoryKey = categoryRecord != null ? categoryRecord.getCategoryKey() : fallbackCategoryKey(ticket.getCategory());
         return new TicketResponse(
                 ticket.getId(),
@@ -72,11 +77,11 @@ public record TicketResponse(
                 categoryRecord != null ? categoryRecord.getDisplayName() : null,
                 ticket.getComplaintDescription(),
                 ticket.getStatus(),
-                statusRecord != null ? statusRecord.getId() : null,
-                statusRecord != null ? statusRecord.getStatusKey() : fallbackStatusKey(ticket.getStatus()),
-                statusRecord != null ? statusRecord.getDisplayName() : fallbackStatusDisplayName(ticket.getStatus()),
-                statusRecord != null ? statusRecord.isActive() : Boolean.TRUE,
-                statusRecord != null ? statusRecord.isTerminal() : fallbackStatusTerminal(ticket.getStatus()),
+                statusMetadata.statusId(),
+                statusMetadata.statusKey(),
+                statusMetadata.statusDisplayName(),
+                statusMetadata.statusActive(),
+                statusMetadata.statusTerminal(),
                 ticket.getCreatedAt(),
                 ticket.getUpdatedAt(),
                 ticket.getCreatedByEmployeeId(),
@@ -100,6 +105,27 @@ public record TicketResponse(
 
     private static String fallbackCategoryKey(TicketCategory category) {
         return category == null ? null : category.name();
+    }
+
+    private static StatusMetadata resolveStatusMetadata(Ticket ticket, ResolvedTicketStatus resolvedStatus) {
+        if (resolvedStatus != null) {
+            return new StatusMetadata(
+                    resolvedStatus.actualStatusId(),
+                    resolvedStatus.actualStatusKey(),
+                    resolvedStatus.actualStatusDisplayName(),
+                    resolvedStatus.actualStatusActive(),
+                    resolvedStatus.actualStatusTerminal()
+            );
+        }
+
+        WorkflowStatus statusRecord = ticket.getStatusRecord();
+        return new StatusMetadata(
+                statusRecord != null ? statusRecord.getId() : null,
+                statusRecord != null ? statusRecord.getStatusKey() : fallbackStatusKey(ticket.getStatus()),
+                statusRecord != null ? statusRecord.getDisplayName() : fallbackStatusDisplayName(ticket.getStatus()),
+                statusRecord != null ? statusRecord.isActive() : Boolean.TRUE,
+                statusRecord != null ? statusRecord.isTerminal() : fallbackStatusTerminal(ticket.getStatus())
+        );
     }
 
     private static String fallbackStatusKey(TicketStatus status) {
@@ -130,5 +156,14 @@ public record TicketResponse(
 
     private static Boolean fallbackStatusTerminal(TicketStatus status) {
         return status == TicketStatus.COMPLETED || status == TicketStatus.CANCELLED;
+    }
+
+    private record StatusMetadata(
+            Long statusId,
+            String statusKey,
+            String statusDisplayName,
+            Boolean statusActive,
+            Boolean statusTerminal
+    ) {
     }
 }

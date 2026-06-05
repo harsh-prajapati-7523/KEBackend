@@ -83,6 +83,7 @@ public class TicketService {
     private final WorkflowService workflowService;
     private final AccessService accessService;
     private final WorkflowStatusRepository workflowStatusRepository;
+    private final EffectiveStatusResolver effectiveStatusResolver;
 
     public TicketService(
             TicketRepository repository,
@@ -93,7 +94,8 @@ public class TicketService {
             TicketChargeService ticketChargeService,
             WorkflowService workflowService,
             AccessService accessService,
-            WorkflowStatusRepository workflowStatusRepository
+            WorkflowStatusRepository workflowStatusRepository,
+            EffectiveStatusResolver effectiveStatusResolver
     ) {
         this.repository = repository;
         this.ticketCategoryRepository = ticketCategoryRepository;
@@ -104,6 +106,7 @@ public class TicketService {
         this.workflowService = workflowService;
         this.accessService = accessService;
         this.workflowStatusRepository = workflowStatusRepository;
+        this.effectiveStatusResolver = effectiveStatusResolver;
     }
 
     @Transactional
@@ -143,7 +146,7 @@ public class TicketService {
 
         Ticket saved = repository.save(ticket);
         saveDynamicValues(saved, dynamicValueDrafts);
-        return TicketResponse.from(saved, BigDecimal.ZERO.setScale(2));
+        return toTicketResponse(saved, BigDecimal.ZERO.setScale(2));
     }
 
     @Transactional(readOnly = true)
@@ -187,7 +190,7 @@ public class TicketService {
             ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.PICKED));
             ticket.setPickedByEmployeeId(employeeId);
             Ticket saved = repository.save(ticket);
-            TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
+            TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
             log.info("event=ticket_picked ticketId={} previousOwner={} newOwner={}", ticketId, previousOwner, employeeId);
             return resp;
         }
@@ -217,7 +220,7 @@ public class TicketService {
             String previousOwner = ticket.getPickedByEmployeeId();
             ticket.setPickedByEmployeeId(employeeId);
             Ticket saved = repository.save(ticket);
-            TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
+            TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
             log.info("event=ticket_started ticketId={} previousOwner={} employeeId={} statusTransition=PICKED->IN_PROGRESS", ticketId, previousOwner, employeeId);
             return resp;
         }
@@ -276,7 +279,7 @@ public class TicketService {
         ticket.setCompletionRemark(trimToNull(request.getCompletionRemark()));
 
         Ticket saved = repository.save(ticket);
-        TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
+        TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
         log.info("event=ticket_completed ticketId={} ticketNumber={} employeeId={} statusTransition=IN_PROGRESS->COMPLETED", ticketId, ticket.getTicketNumber(), employeeId);
         return resp;
     }
@@ -330,7 +333,7 @@ public class TicketService {
         ticket.setWarrantyUpdatedByEmployeeId(employeeId);
 
         Ticket saved = repository.save(ticket);
-        TicketResponse response = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
+        TicketResponse response = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
         log.info("event=warranty_updated ticketId={} ticketNumber={} employeeId={} warrantyStatus={} manufacturerStatus={}",
                 ticketId, saved.getTicketNumber(), employeeId, saved.getWarrantyStatus(), saved.getManufacturerStatus());
         return response;
@@ -374,7 +377,7 @@ public class TicketService {
         ticket.setCancellationReason(request.getCancellationReason().trim());
 
         Ticket saved = repository.save(ticket);
-        TicketResponse resp = TicketResponse.from(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
+        TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
         log.info("event=ticket_cancelled ticketId={} ticketNumber={} employeeId={} statusTransition={}->CANCELLED", ticketId, ticket.getTicketNumber(), employeeId, previousStatus);
         return resp;
     }
@@ -593,7 +596,7 @@ public class TicketService {
     public List<TicketResponse> listTickets() {
         List<TicketResponse> list = repository.findAllByOrderByCreatedAtDesc()
             .stream()
-            .map(ticket -> TicketResponse.from(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
+            .map(ticket -> toTicketResponse(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
             .toList();
         log.info("event=ticket_list_returned count={}", list.size());
         return list;
@@ -677,7 +680,7 @@ public class TicketService {
 
         return repository.searchTickets(escapeLikeWildcards(normalizedQuery))
                 .stream()
-                .map(ticket -> TicketResponse.from(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
+                .map(ticket -> toTicketResponse(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
                 .toList();
     }
 
@@ -723,8 +726,12 @@ public class TicketService {
                         Sort.by(Sort.Direction.DESC, "createdAt")
                 )
                 .stream()
-                .map(ticket -> TicketResponse.from(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
+                .map(ticket -> toTicketResponse(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
                 .toList();
+    }
+
+    private TicketResponse toTicketResponse(Ticket ticket, BigDecimal totalCharge) {
+        return TicketResponse.from(ticket, totalCharge, effectiveStatusResolver.resolve(ticket));
     }
 
     private List<DynamicValueDraft> validateDynamicValues(
