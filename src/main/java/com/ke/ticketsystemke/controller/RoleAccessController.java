@@ -1,7 +1,9 @@
 package com.ke.ticketsystemke.controller;
 
 import com.ke.ticketsystemke.dto.CurrentAccessResponse;
+import com.ke.ticketsystemke.dto.DynamicRoleAccessResponse;
 import com.ke.ticketsystemke.dto.RoleAccessResponse;
+import com.ke.ticketsystemke.dto.UpdateDynamicRoleAccessRequest;
 import com.ke.ticketsystemke.dto.UpdateRoleAccessRequest;
 import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.RoleAccessService;
@@ -41,5 +43,14 @@ public class RoleAccessController {
             Authentication authentication
     ) {
         return roleAccessService.updateRoleAccess(roleId, request, authentication.getName());
+    }
+
+    @PatchMapping("/volt/role-access/{roleId}/dynamic")
+    public DynamicRoleAccessResponse updateDynamicRoleAccess(
+            @PathVariable Long roleId,
+            @Valid @RequestBody UpdateDynamicRoleAccessRequest request,
+            Authentication authentication
+    ) {
+        return roleAccessService.updateDynamicRoleAccess(roleId, request, authentication.getName());
     }
 }
