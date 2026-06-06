@@ -65,6 +65,37 @@ public class RoleAccessService {
         return toResponse(role);
     }
 
+    @Transactional(readOnly = true)
+    public DynamicRoleAccessResponse getDynamicRoleAccess(Long roleId) {
+        Role role = findRole(roleId);
+        List<RoleAccessRule> roleRules = roleAccessRuleRepository.findAllByRoleId(role.getId());
+        Map<String, Boolean> allowedByAccessKey = roleRules.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        RoleAccessRule::getAccessKey,
+                        RoleAccessRule::isAllowed,
+                        (first, second) -> second
+                ));
+
+        List<DynamicRoleAccessRuleResponse> rules = accessKeyMetadataRepository
+                .findAllBySystemKeyFalseAndProtectedKeyFalseOrderByCategoryAscSortOrderAscDisplayNameAscAccessKeyAsc()
+                .stream()
+                .filter(metadata -> !isSystemAccessKey(metadata.getAccessKey()))
+                .map(metadata -> toDynamicRuleResponse(
+                        metadata,
+                        allowedByAccessKey.getOrDefault(metadata.getAccessKey(), false)
+                ))
+                .toList();
+
+        log.info("event=dynamic_role_access_returned roleId={} ruleCount={} result=returned", role.getId(), rules.size());
+        return new DynamicRoleAccessResponse(
+                role.getId(),
+                role.getRoleKey(),
+                role.getDisplayName(),
+                isSuperAdmin(role),
+                rules
+        );
+    }
+
     @Transactional
     public DynamicRoleAccessResponse updateDynamicRoleAccess(
             Long roleId,
@@ -109,15 +140,7 @@ public class RoleAccessService {
             rule.setUpdatedByEmployee(actor);
             roleAccessRuleRepository.save(rule);
 
-            responses.add(new DynamicRoleAccessRuleResponse(
-                    metadata.getAccessKey(),
-                    metadata.getDisplayName(),
-                    metadata.getCategory(),
-                    metadata.isActive(),
-                    rule.isAllowed(),
-                    metadata.isSystemKey(),
-                    metadata.isProtectedKey()
-            ));
+            responses.add(toDynamicRuleResponse(metadata, rule.isAllowed()));
         }
 
         log.info("event=dynamic_role_access_updated employeeId={} roleId={} roleKey={} resultCount={}",
@@ -126,6 +149,7 @@ public class RoleAccessService {
                 role.getId(),
                 role.getRoleKey(),
                 role.getDisplayName(),
+                isSuperAdmin(role),
                 responses
         );
     }
@@ -228,5 +252,19 @@ public class RoleAccessService {
         } catch (RuntimeException ex) {
             return false;
         }
+    }
+
+    private DynamicRoleAccessRuleResponse toDynamicRuleResponse(AccessKeyMetadata metadata, boolean allowed) {
+        return new DynamicRoleAccessRuleResponse(
+                metadata.getAccessKey(),
+                metadata.getDisplayName(),
+                metadata.getDescription(),
+                metadata.getCategory(),
+                metadata.isActive(),
+                allowed,
+                metadata.isSystemKey(),
+                metadata.isProtectedKey(),
+                metadata.getSortOrder()
+        );
     }
 }

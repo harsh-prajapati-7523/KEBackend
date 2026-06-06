@@ -10,6 +10,8 @@ public interface AccessKeyMetadataRepository extends JpaRepository<AccessKeyMeta
 
     List<AccessKeyMetadata> findAllByOrderBySortOrderAscAccessKeyAsc();
 
+    List<AccessKeyMetadata> findAllBySystemKeyFalseAndProtectedKeyFalseOrderByCategoryAscSortOrderAscDisplayNameAscAccessKeyAsc();
+
     boolean existsByAccessKey(String accessKey);
 
     Optional<AccessKeyMetadata> findByAccessKey(String accessKey);

@@ -6,6 +6,7 @@ public record DynamicRoleAccessResponse(
         Long roleId,
         String roleKey,
         String roleDisplayName,
+        boolean protectedRole,
         List<DynamicRoleAccessRuleResponse> rules
 ) {
 }

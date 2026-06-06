@@ -36,6 +36,11 @@ public class RoleAccessController {
         return roleAccessService.getRoleAccess(roleId);
     }
 
+    @GetMapping("/volt/role-access/{roleId}/dynamic")
+    public DynamicRoleAccessResponse getDynamicRoleAccess(@PathVariable Long roleId) {
+        return roleAccessService.getDynamicRoleAccess(roleId);
+    }
+
     @PatchMapping("/volt/role-access/{roleId}")
     public RoleAccessResponse updateRoleAccess(
             @PathVariable Long roleId,
