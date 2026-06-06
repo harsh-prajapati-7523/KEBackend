@@ -11,30 +11,40 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 
 @Entity
-@Table(
-        name = "role_access_rules",
-        uniqueConstraints = @UniqueConstraint(name = "uk_role_access_rules_role_access_key", columnNames = {"role_id", "access_key"})
-)
-public class RoleAccessRule {
+@Table(name = "access_key_metadata")
+public class AccessKeyMetadata {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "role_id", nullable = false)
-    private Role role;
-
-    @Column(name = "access_key", nullable = false, length = 60)
+    @Column(name = "access_key", nullable = false, unique = true, updatable = false, length = 60)
     private String accessKey;
 
+    @Column(name = "display_name", nullable = false, length = 80)
+    private String displayName;
+
+    @Column(length = 255)
+    private String description;
+
+    @Column(nullable = false, length = 80)
+    private String category;
+
     @Column(nullable = false)
-    private boolean allowed;
+    private boolean active = true;
+
+    @Column(name = "system_key", nullable = false)
+    private boolean systemKey = true;
+
+    @Column(name = "protected_key", nullable = false)
+    private boolean protectedKey = true;
+
+    @Column(name = "sort_order")
+    private Integer sortOrder;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -50,14 +60,6 @@ public class RoleAccessRule {
         return id;
     }
 
-    public Role getRole() {
-        return role;
-    }
-
-    public void setRole(Role role) {
-        this.role = role;
-    }
-
     public String getAccessKey() {
         return accessKey;
     }
@@ -66,20 +68,60 @@ public class RoleAccessRule {
         this.accessKey = accessKey;
     }
 
-    public void setSystemAccessKey(AccessKey accessKey) {
-        this.accessKey = accessKey == null ? null : accessKey.name();
+    public String getDisplayName() {
+        return displayName;
     }
 
-    public boolean isSystemAccessKey(AccessKey accessKey) {
-        return accessKey != null && accessKey.name().equals(this.accessKey);
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 
-    public boolean isAllowed() {
-        return allowed;
+    public String getDescription() {
+        return description;
     }
 
-    public void setAllowed(boolean allowed) {
-        this.allowed = allowed;
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
+    public boolean isSystemKey() {
+        return systemKey;
+    }
+
+    public void setSystemKey(boolean systemKey) {
+        this.systemKey = systemKey;
+    }
+
+    public boolean isProtectedKey() {
+        return protectedKey;
+    }
+
+    public void setProtectedKey(boolean protectedKey) {
+        this.protectedKey = protectedKey;
+    }
+
+    public Integer getSortOrder() {
+        return sortOrder;
+    }
+
+    public void setSortOrder(Integer sortOrder) {
+        this.sortOrder = sortOrder;
     }
 
     public Instant getCreatedAt() {

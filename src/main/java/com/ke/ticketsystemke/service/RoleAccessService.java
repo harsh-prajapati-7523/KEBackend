@@ -90,7 +90,7 @@ public class RoleAccessService {
     private RoleAccessRule createRule(Role role, AccessKey accessKey) {
         RoleAccessRule rule = new RoleAccessRule();
         rule.setRole(role);
-        rule.setAccessKey(accessKey);
+        rule.setSystemAccessKey(accessKey);
         return rule;
     }
 

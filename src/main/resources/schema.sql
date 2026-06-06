@@ -109,40 +109,102 @@ ALTER TABLE role_access_rules
     DROP CONSTRAINT IF EXISTS ck_role_access_rules_access_key;
 
 ALTER TABLE role_access_rules
-    ADD CONSTRAINT ck_role_access_rules_access_key
-    CHECK (access_key IN (
-        'VIEW_DASHBOARD',
-        'VIEW_TICKETS',
-        'CREATE_TICKET',
-        'PICK_TICKET',
-        'START_WORK',
-        'COMPLETE_TICKET',
-        'CANCEL_TICKET',
-        'UPDATE_WARRANTY',
-        'VIEW_CUSTOMER_HISTORY',
-        'VIEW_CHARGES',
-        'ADD_CHARGE',
-        'DELETE_CHARGE',
-        'USE_TICKET_SEARCH',
-        'USE_TICKET_FILTERS',
-        'USE_SMART_SUGGESTIONS',
-        'VIEW_EMPLOYEE_MANAGEMENT',
-        'MANAGE_EMPLOYEES',
-        'VIEW_ROLE_MANAGEMENT',
-        'MANAGE_ROLES',
-        'VIEW_TICKET_CATEGORY_MANAGEMENT',
-        'MANAGE_TICKET_CATEGORIES',
-        'VIEW_TICKET_FIELD_MANAGEMENT',
-        'MANAGE_TICKET_FIELDS',
-        'VIEW_CATEGORY_FIELD_CONFIGURATION',
-        'MANAGE_CATEGORY_FIELD_CONFIGS',
-        'VIEW_DROPDOWN_SOURCE_MANAGEMENT',
-        'MANAGE_DROPDOWN_SOURCES'
-    ));
+    DROP CONSTRAINT IF EXISTS ck_role_access_rules_access_key_format;
+
+ALTER TABLE role_access_rules
+    ADD CONSTRAINT ck_role_access_rules_access_key_format
+    CHECK (access_key ~ '^[A-Z0-9_]{2,60}$');
 
 CREATE INDEX IF NOT EXISTS idx_role_access_rules_role_id ON role_access_rules(role_id);
 
 CREATE INDEX IF NOT EXISTS idx_role_access_rules_access_key ON role_access_rules(access_key);
+
+CREATE TABLE IF NOT EXISTS access_key_metadata (
+    id BIGSERIAL PRIMARY KEY,
+    access_key VARCHAR(60) NOT NULL UNIQUE,
+    display_name VARCHAR(80) NOT NULL,
+    description VARCHAR(255),
+    category VARCHAR(80) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    system_key BOOLEAN NOT NULL DEFAULT TRUE,
+    protected_key BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INTEGER,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_by_employee_id BIGINT,
+    CONSTRAINT fk_access_key_metadata_updated_by_employee FOREIGN KEY (updated_by_employee_id)
+        REFERENCES employees(id),
+    CONSTRAINT ck_access_key_metadata_access_key_format CHECK (access_key ~ '^[A-Z0-9_]{2,60}$')
+);
+
+ALTER TABLE access_key_metadata
+    ALTER COLUMN active SET DEFAULT TRUE;
+
+ALTER TABLE access_key_metadata
+    ALTER COLUMN system_key SET DEFAULT TRUE;
+
+ALTER TABLE access_key_metadata
+    ALTER COLUMN protected_key SET DEFAULT TRUE;
+
+ALTER TABLE access_key_metadata
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE access_key_metadata
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS idx_access_key_metadata_sort_key
+    ON access_key_metadata(sort_order, access_key);
+
+INSERT INTO access_key_metadata (
+    access_key,
+    display_name,
+    description,
+    category,
+    active,
+    system_key,
+    protected_key,
+    sort_order,
+    created_at,
+    updated_at
+)
+VALUES
+    ('VIEW_DASHBOARD', 'View Dashboard', 'View the employee dashboard.', 'Dashboard', TRUE, TRUE, TRUE, 10, now(), now()),
+    ('VIEW_TICKETS', 'View Tickets', 'View ticket lists and ticket details.', 'Tickets', TRUE, TRUE, TRUE, 20, now(), now()),
+    ('CREATE_TICKET', 'Create Ticket', 'Create new tickets.', 'Tickets', TRUE, TRUE, TRUE, 30, now(), now()),
+    ('PICK_TICKET', 'Pick Ticket', 'Pick or take ownership of an eligible ticket.', 'Ticket Actions', TRUE, TRUE, TRUE, 40, now(), now()),
+    ('START_WORK', 'Start Work', 'Move an eligible ticket into work in progress.', 'Ticket Actions', TRUE, TRUE, TRUE, 50, now(), now()),
+    ('COMPLETE_TICKET', 'Complete Ticket', 'Complete an eligible in-progress ticket.', 'Ticket Actions', TRUE, TRUE, TRUE, 60, now(), now()),
+    ('CANCEL_TICKET', 'Cancel Ticket', 'Cancel an eligible ticket.', 'Ticket Actions', TRUE, TRUE, TRUE, 70, now(), now()),
+    ('UPDATE_WARRANTY', 'Update Warranty', 'Update ticket warranty and manufacturer details.', 'Ticket Actions', TRUE, TRUE, TRUE, 80, now(), now()),
+    ('VIEW_CUSTOMER_HISTORY', 'View Customer History', 'View customer ticket history.', 'Tickets', TRUE, TRUE, TRUE, 90, now(), now()),
+    ('VIEW_CHARGES', 'View Charges', 'View ticket charges.', 'Ticket Charges', TRUE, TRUE, TRUE, 100, now(), now()),
+    ('ADD_CHARGE', 'Add Charge', 'Add charges to eligible tickets.', 'Ticket Charges', TRUE, TRUE, TRUE, 110, now(), now()),
+    ('DELETE_CHARGE', 'Delete Charge', 'Delete ticket charges.', 'Ticket Charges', TRUE, TRUE, TRUE, 120, now(), now()),
+    ('USE_TICKET_SEARCH', 'Use Ticket Search', 'Use ticket search.', 'Ticket Filters', TRUE, TRUE, TRUE, 130, now(), now()),
+    ('USE_TICKET_FILTERS', 'Use Ticket Filters', 'Use ticket filters.', 'Ticket Filters', TRUE, TRUE, TRUE, 140, now(), now()),
+    ('USE_SMART_SUGGESTIONS', 'Use Smart Suggestions', 'Use smart suggestions in supported fields.', 'Smart Suggestions', TRUE, TRUE, TRUE, 150, now(), now()),
+    ('VIEW_EMPLOYEE_MANAGEMENT', 'View Employee Management', 'View employee management.', 'Admin Configuration', TRUE, TRUE, TRUE, 160, now(), now()),
+    ('MANAGE_EMPLOYEES', 'Manage Employees', 'Create, update, and administer employees.', 'Admin Configuration', TRUE, TRUE, TRUE, 170, now(), now()),
+    ('VIEW_ROLE_MANAGEMENT', 'View Role Management', 'View role management.', 'Role Access', TRUE, TRUE, TRUE, 180, now(), now()),
+    ('MANAGE_ROLES', 'Manage Roles', 'Create, update, and administer roles.', 'Role Access', TRUE, TRUE, TRUE, 190, now(), now()),
+    ('VIEW_TICKET_CATEGORY_MANAGEMENT', 'View Ticket Category Management', 'View ticket category management.', 'Admin Configuration', TRUE, TRUE, TRUE, 200, now(), now()),
+    ('MANAGE_TICKET_CATEGORIES', 'Manage Ticket Categories', 'Create and update ticket categories.', 'Admin Configuration', TRUE, TRUE, TRUE, 210, now(), now()),
+    ('VIEW_TICKET_FIELD_MANAGEMENT', 'View Ticket Field Management', 'View ticket field management.', 'Admin Configuration', TRUE, TRUE, TRUE, 220, now(), now()),
+    ('MANAGE_TICKET_FIELDS', 'Manage Ticket Fields', 'Create and update ticket fields.', 'Admin Configuration', TRUE, TRUE, TRUE, 230, now(), now()),
+    ('VIEW_CATEGORY_FIELD_CONFIGURATION', 'View Category Field Configuration', 'View category field configuration.', 'Admin Configuration', TRUE, TRUE, TRUE, 240, now(), now()),
+    ('MANAGE_CATEGORY_FIELD_CONFIGS', 'Manage Category Field Configs', 'Create and update category field configuration.', 'Admin Configuration', TRUE, TRUE, TRUE, 250, now(), now()),
+    ('VIEW_DROPDOWN_SOURCE_MANAGEMENT', 'View Dropdown Source Management', 'View dropdown source management.', 'Admin Configuration', TRUE, TRUE, TRUE, 260, now(), now()),
+    ('MANAGE_DROPDOWN_SOURCES', 'Manage Dropdown Sources', 'Create and update dropdown sources.', 'Admin Configuration', TRUE, TRUE, TRUE, 270, now(), now())
+ON CONFLICT (access_key) DO UPDATE
+SET
+    display_name = EXCLUDED.display_name,
+    description = EXCLUDED.description,
+    category = EXCLUDED.category,
+    active = TRUE,
+    system_key = TRUE,
+    protected_key = TRUE,
+    sort_order = EXCLUDED.sort_order,
+    updated_at = now();
 
 INSERT INTO role_access_rules (role_id, access_key, allowed, created_at, updated_at)
 SELECT r.id, v.access_key, TRUE, now(), now()

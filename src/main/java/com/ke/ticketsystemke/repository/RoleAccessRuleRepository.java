@@ -11,5 +11,9 @@ public interface RoleAccessRuleRepository extends JpaRepository<RoleAccessRule, 
 
     List<RoleAccessRule> findAllByRoleId(Long roleId);
 
-    Optional<RoleAccessRule> findByRoleIdAndAccessKey(Long roleId, AccessKey accessKey);
+    Optional<RoleAccessRule> findByRoleIdAndAccessKey(Long roleId, String accessKey);
+
+    default Optional<RoleAccessRule> findByRoleIdAndAccessKey(Long roleId, AccessKey accessKey) {
+        return accessKey == null ? Optional.empty() : findByRoleIdAndAccessKey(roleId, accessKey.name());
+    }
 }

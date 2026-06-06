@@ -51,13 +51,17 @@ public class AccessService {
             if (accessKey == AccessKey.VIEW_DASHBOARD) {
                 return true;
             }
-            return roleAccessRuleRepository.findByRoleIdAndAccessKey(role.getId(), accessKey)
-                    .map(RoleAccessRule::isAllowed)
-                    .orElse(false);
+            return isAllowedForRole(role, accessKey.name());
         } catch (RuntimeException ex) {
             log.warn("event=access_check_failed employeeId={} accessKey={} decision=deny", employeeId, accessKey);
             return false;
         }
+    }
+
+    private boolean isAllowedForRole(Role role, String accessKey) {
+        return roleAccessRuleRepository.findByRoleIdAndAccessKey(role.getId(), accessKey)
+                .map(RoleAccessRule::isAllowed)
+                .orElse(false);
     }
 
     @Transactional(readOnly = true)
@@ -103,12 +107,22 @@ public class AccessService {
         if (!superAdmin) {
             List<RoleAccessRule> rules = roleAccessRuleRepository.findAllByRoleId(role.getId());
             for (RoleAccessRule rule : rules) {
-                if (rule.getAccessKey() != AccessKey.VIEW_DASHBOARD) {
-                    access.put(rule.getAccessKey(), rule.isAllowed());
+                AccessKey accessKey = toSystemAccessKey(rule.getAccessKey());
+                if (accessKey != null && accessKey != AccessKey.VIEW_DASHBOARD) {
+                    access.put(accessKey, rule.isAllowed());
                 }
             }
         }
         return access;
+    }
+
+    private AccessKey toSystemAccessKey(String accessKey) {
+        try {
+            return accessKey == null ? null : AccessKey.valueOf(accessKey);
+        } catch (IllegalArgumentException ex) {
+            log.warn("event=unknown_role_access_key accessKey={} decision=ignore", accessKey);
+            return null;
+        }
     }
 
     Role resolveActiveRole(Employee employee) {
