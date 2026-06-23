@@ -84,6 +84,7 @@ public class TicketService {
     private final AccessService accessService;
     private final WorkflowStatusRepository workflowStatusRepository;
     private final EffectiveStatusResolver effectiveStatusResolver;
+    private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
 
     public TicketService(
             TicketRepository repository,
@@ -95,7 +96,8 @@ public class TicketService {
             WorkflowService workflowService,
             AccessService accessService,
             WorkflowStatusRepository workflowStatusRepository,
-            EffectiveStatusResolver effectiveStatusResolver
+            EffectiveStatusResolver effectiveStatusResolver,
+            TicketWorkflowHistoryService ticketWorkflowHistoryService
     ) {
         this.repository = repository;
         this.ticketCategoryRepository = ticketCategoryRepository;
@@ -107,6 +109,7 @@ public class TicketService {
         this.accessService = accessService;
         this.workflowStatusRepository = workflowStatusRepository;
         this.effectiveStatusResolver = effectiveStatusResolver;
+        this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
     }
 
     @Transactional
@@ -186,10 +189,25 @@ public class TicketService {
         if (status == TicketStatus.NEW || status == TicketStatus.PICKED) {
             workflowService.requireTransitionAllowed(AccessKey.PICK_TICKET, status, TicketStatus.PICKED);
             String previousOwner = ticket.getPickedByEmployeeId();
+            Long fromStatusId = resolveStatusRecordId(ticket);
+            WorkflowStatus toStatusRecord = resolveWorkflowStatusForTicketStatus(TicketStatus.PICKED);
             ticket.setStatus(TicketStatus.PICKED);
-            ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.PICKED));
+            ticket.setStatusRecord(toStatusRecord);
             ticket.setPickedByEmployeeId(employeeId);
             Ticket saved = repository.save(ticket);
+            ticketWorkflowHistoryService.recordSuccessfulFixedAction(
+                    saved,
+                    AccessKey.PICK_TICKET,
+                    status,
+                    TicketStatus.PICKED,
+                    fromStatusId,
+                    resolveStatusRecordId(toStatusRecord),
+                    employeeId,
+                    previousOwner,
+                    employeeId,
+                    null,
+                    null
+            );
             TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
             log.info("event=ticket_picked ticketId={} previousOwner={} newOwner={}", ticketId, previousOwner, employeeId);
             return resp;
@@ -215,11 +233,26 @@ public class TicketService {
 
         if (ticket.getStatus() == TicketStatus.PICKED) {
             workflowService.requireTransitionAllowed(AccessKey.START_WORK, TicketStatus.PICKED, TicketStatus.IN_PROGRESS);
+            Long fromStatusId = resolveStatusRecordId(ticket);
+            WorkflowStatus toStatusRecord = resolveWorkflowStatusForTicketStatus(TicketStatus.IN_PROGRESS);
             ticket.setStatus(TicketStatus.IN_PROGRESS);
-            ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.IN_PROGRESS));
+            ticket.setStatusRecord(toStatusRecord);
             String previousOwner = ticket.getPickedByEmployeeId();
             ticket.setPickedByEmployeeId(employeeId);
             Ticket saved = repository.save(ticket);
+            ticketWorkflowHistoryService.recordSuccessfulFixedAction(
+                    saved,
+                    AccessKey.START_WORK,
+                    TicketStatus.PICKED,
+                    TicketStatus.IN_PROGRESS,
+                    fromStatusId,
+                    resolveStatusRecordId(toStatusRecord),
+                    employeeId,
+                    previousOwner,
+                    employeeId,
+                    null,
+                    null
+            );
             TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
             log.info("event=ticket_started ticketId={} previousOwner={} employeeId={} statusTransition=PICKED->IN_PROGRESS", ticketId, previousOwner, employeeId);
             return resp;
@@ -272,13 +305,29 @@ public class TicketService {
             );
         }
 
+        String owner = ticket.getPickedByEmployeeId();
+        Long fromStatusId = resolveStatusRecordId(ticket);
+        WorkflowStatus toStatusRecord = resolveWorkflowStatusForTicketStatus(TicketStatus.COMPLETED);
         ticket.setStatus(TicketStatus.COMPLETED);
-        ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.COMPLETED));
+        ticket.setStatusRecord(toStatusRecord);
         ticket.setCompletedAt(Instant.now());
         ticket.setCompletedByEmployeeId(employeeId);
         ticket.setCompletionRemark(trimToNull(request.getCompletionRemark()));
 
         Ticket saved = repository.save(ticket);
+        ticketWorkflowHistoryService.recordSuccessfulFixedAction(
+                saved,
+                AccessKey.COMPLETE_TICKET,
+                TicketStatus.IN_PROGRESS,
+                TicketStatus.COMPLETED,
+                fromStatusId,
+                resolveStatusRecordId(toStatusRecord),
+                employeeId,
+                owner,
+                owner,
+                saved.getCompletionRemark(),
+                null
+        );
         TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
         log.info("event=ticket_completed ticketId={} ticketNumber={} employeeId={} statusTransition=IN_PROGRESS->COMPLETED", ticketId, ticket.getTicketNumber(), employeeId);
         return resp;
@@ -369,17 +418,41 @@ public class TicketService {
         }
 
         TicketStatus previousStatus = ticket.getStatus();
+        String previousOwner = ticket.getPickedByEmployeeId();
+        Long fromStatusId = resolveStatusRecordId(ticket);
         workflowService.requireTransitionAllowed(AccessKey.CANCEL_TICKET, previousStatus, TicketStatus.CANCELLED);
+        WorkflowStatus toStatusRecord = resolveWorkflowStatusForTicketStatus(TicketStatus.CANCELLED);
         ticket.setStatus(TicketStatus.CANCELLED);
-        ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.CANCELLED));
+        ticket.setStatusRecord(toStatusRecord);
         ticket.setCancelledAt(Instant.now());
         ticket.setCancelledByEmployeeId(employeeId);
         ticket.setCancellationReason(request.getCancellationReason().trim());
 
         Ticket saved = repository.save(ticket);
+        ticketWorkflowHistoryService.recordSuccessfulFixedAction(
+                saved,
+                AccessKey.CANCEL_TICKET,
+                previousStatus,
+                TicketStatus.CANCELLED,
+                fromStatusId,
+                resolveStatusRecordId(toStatusRecord),
+                employeeId,
+                previousOwner,
+                null,
+                null,
+                saved.getCancellationReason()
+        );
         TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
         log.info("event=ticket_cancelled ticketId={} ticketNumber={} employeeId={} statusTransition={}->CANCELLED", ticketId, ticket.getTicketNumber(), employeeId, previousStatus);
         return resp;
+    }
+
+    private Long resolveStatusRecordId(Ticket ticket) {
+        return ticket.getStatusRecord() == null ? null : ticket.getStatusRecord().getId();
+    }
+
+    private Long resolveStatusRecordId(WorkflowStatus workflowStatus) {
+        return workflowStatus == null ? null : workflowStatus.getId();
     }
 
     private WorkflowStatus resolveWorkflowStatusForTicketStatus(TicketStatus status) {
