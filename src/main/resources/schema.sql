@@ -39,7 +39,6 @@ INSERT INTO roles (role_key, display_name, active, system_role, created_at, upda
 VALUES
     ('SUPER_ADMIN', 'Super Admin', TRUE, TRUE, now(), now()),
     ('ADMIN', 'Admin', TRUE, TRUE, now(), now()),
-    ('EMPLOYEE', 'Employee', TRUE, TRUE, now(), now()),
     ('TECHNICIAN', 'Technician', TRUE, TRUE, now(), now())
 ON CONFLICT (role_key) DO UPDATE
 SET
@@ -248,7 +247,7 @@ CROSS JOIN (
         ('USE_TICKET_FILTERS'),
         ('USE_SMART_SUGGESTIONS')
 ) AS v(access_key)
-WHERE r.role_key IN ('EMPLOYEE', 'TECHNICIAN')
+WHERE r.role_key = 'TECHNICIAN'
 ON CONFLICT (role_id, access_key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS workflow_transitions (
