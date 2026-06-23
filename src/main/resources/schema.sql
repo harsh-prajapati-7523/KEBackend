@@ -883,6 +883,72 @@ ALTER TABLE tickets
 ALTER TABLE tickets
     ADD COLUMN IF NOT EXISTS warranty_updated_by_employee_id VARCHAR;
 
+CREATE TABLE IF NOT EXISTS ticket_workflow_history (
+    id BIGSERIAL PRIMARY KEY,
+    ticket_id BIGINT,
+    ticket_number VARCHAR(40),
+    action_key VARCHAR(60),
+    workflow_action_id BIGINT,
+    workflow_transition_id BIGINT,
+    from_status VARCHAR(60),
+    to_status VARCHAR(60),
+    from_status_id BIGINT,
+    to_status_id BIGINT,
+    executed_by_employee_id VARCHAR(80),
+    executed_by_employee_name_snapshot VARCHAR(120),
+    previous_owner_employee_id VARCHAR(80),
+    new_owner_employee_id VARCHAR(80),
+    comment VARCHAR(1000),
+    reason VARCHAR(500),
+    result VARCHAR(30),
+    failure_reason_code VARCHAR(80),
+    failure_message VARCHAR(255),
+    system_transition BOOLEAN NOT NULL DEFAULT FALSE,
+    custom_transition BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    metadata_json TEXT,
+    CONSTRAINT fk_ticket_workflow_history_ticket FOREIGN KEY (ticket_id)
+        REFERENCES tickets(id),
+    CONSTRAINT fk_ticket_workflow_history_action FOREIGN KEY (workflow_action_id)
+        REFERENCES workflow_actions(id),
+    CONSTRAINT fk_ticket_workflow_history_transition FOREIGN KEY (workflow_transition_id)
+        REFERENCES workflow_transitions(id),
+    CONSTRAINT fk_ticket_workflow_history_from_status FOREIGN KEY (from_status_id)
+        REFERENCES workflow_statuses(id),
+    CONSTRAINT fk_ticket_workflow_history_to_status FOREIGN KEY (to_status_id)
+        REFERENCES workflow_statuses(id)
+);
+
+ALTER TABLE ticket_workflow_history
+    ALTER COLUMN system_transition SET DEFAULT FALSE;
+
+ALTER TABLE ticket_workflow_history
+    ALTER COLUMN custom_transition SET DEFAULT FALSE;
+
+ALTER TABLE ticket_workflow_history
+    ALTER COLUMN created_at SET DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS idx_ticket_workflow_history_ticket_created
+    ON ticket_workflow_history(ticket_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_workflow_history_created
+    ON ticket_workflow_history(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_workflow_history_employee_created
+    ON ticket_workflow_history(executed_by_employee_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_workflow_history_action_created
+    ON ticket_workflow_history(action_key, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_workflow_history_transition_id
+    ON ticket_workflow_history(workflow_transition_id);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_workflow_history_from_status_id
+    ON ticket_workflow_history(from_status_id);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_workflow_history_to_status_id
+    ON ticket_workflow_history(to_status_id);
+
 CREATE TABLE IF NOT EXISTS ticket_charge_items (
     id BIGSERIAL PRIMARY KEY,
     ticket_id BIGINT NOT NULL,

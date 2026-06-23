@@ -1,0 +1,11 @@
+package com.ke.ticketsystemke.repository;
+
+import com.ke.ticketsystemke.entity.TicketWorkflowHistory;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+
+public interface TicketWorkflowHistoryRepository extends JpaRepository<TicketWorkflowHistory, Long> {
+
+    List<TicketWorkflowHistory> findByTicketIdOrderByCreatedAtDesc(Long ticketId);
+}
