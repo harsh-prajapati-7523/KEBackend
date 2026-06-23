@@ -137,7 +137,8 @@ public class AccessService {
     }
 
     private Employee resolveActiveEmployee(String employeeId) {
-        Employee employee = employeeRepository.findByEmployeeId(employeeId)
+        String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
+        Employee employee = employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
         if (!employee.isActive()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Inactive employee");

@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class EmployeeService {
@@ -44,8 +45,8 @@ public class EmployeeService {
 
     @Transactional
     public EmployeeResponse createEmployee(CreateEmployeeRequest request, String actorEmployeeId) {
-        String employeeId = request.getEmployeeId().trim();
-        if (employeeRepository.existsByEmployeeId(employeeId)) {
+        String employeeId = request.getEmployeeId().trim().toUpperCase(Locale.ROOT);
+        if (employeeRepository.existsByEmployeeIdIgnoreCase(employeeId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Employee ID already exists");
         }
 

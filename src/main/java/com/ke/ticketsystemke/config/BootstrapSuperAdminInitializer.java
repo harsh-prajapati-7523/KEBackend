@@ -52,7 +52,7 @@ public class BootstrapSuperAdminInitializer implements ApplicationRunner {
             return;
         }
 
-        if (employeeRepository.existsByEmployeeId(BOOTSTRAP_EMPLOYEE_ID)) {
+        if (employeeRepository.existsByEmployeeIdIgnoreCase(BOOTSTRAP_EMPLOYEE_ID)) {
             log.warn("event=bootstrap_super_admin_failed employeeId={} role={} reason=employee_id_already_exists",
                     BOOTSTRAP_EMPLOYEE_ID, EmployeeRole.SUPER_ADMIN);
             throw new IllegalStateException("Cannot create bootstrap SUPER_ADMIN because employeeId already exists");

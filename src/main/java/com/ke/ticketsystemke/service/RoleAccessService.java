@@ -116,7 +116,8 @@ public class RoleAccessService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Access rules are required");
         }
 
-        Employee actor = employeeRepository.findByEmployeeId(actorEmployeeId).orElse(null);
+        String lookupActorEmployeeId = actorEmployeeId == null ? "" : actorEmployeeId.trim();
+        Employee actor = employeeRepository.findByEmployeeIdIgnoreCase(lookupActorEmployeeId).orElse(null);
         Set<String> seen = new HashSet<>();
         List<DynamicRoleAccessRuleResponse> responses = new ArrayList<>();
 
@@ -166,7 +167,8 @@ public class RoleAccessService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Access rules are required");
         }
 
-        Employee actor = employeeRepository.findByEmployeeId(actorEmployeeId).orElse(null);
+        String lookupActorEmployeeId = actorEmployeeId == null ? "" : actorEmployeeId.trim();
+        Employee actor = employeeRepository.findByEmployeeIdIgnoreCase(lookupActorEmployeeId).orElse(null);
         EnumSet<AccessKey> seen = EnumSet.noneOf(AccessKey.class);
         for (UpdateRoleAccessRuleRequest ruleRequest : request.getRules()) {
             if (ruleRequest == null || ruleRequest.getAccessKey() == null || ruleRequest.getAllowed() == null) {

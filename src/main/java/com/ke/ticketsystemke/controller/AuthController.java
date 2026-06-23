@@ -39,12 +39,12 @@ public class AuthController {
             @RequestBody LoginRequest request
     ) {
 
-        String employeeId = request.getEmployeeId();
+        String employeeId = request.getEmployeeId() == null ? "" : request.getEmployeeId().trim();
         log.info("event=login_attempt employeeId={}", employeeId);
 
-        Employee employee = employeeRepository
-                .findByEmployeeId(employeeId)
-                .orElse(null);
+        Employee employee = employeeId.isBlank()
+                ? null
+                : employeeRepository.findByEmployeeIdIgnoreCase(employeeId).orElse(null);
 
         if (employee == null ||
                 !employee.isActive() ||

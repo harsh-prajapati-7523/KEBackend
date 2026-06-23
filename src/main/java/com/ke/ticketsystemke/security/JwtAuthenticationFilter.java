@@ -68,8 +68,10 @@ public class JwtAuthenticationFilter
 
             String employeeId = jwtService.extractEmployeeId(token);
 
+            String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
+
             Employee employee = employeeRepository
-                    .findByEmployeeId(employeeId)
+                    .findByEmployeeIdIgnoreCase(lookupEmployeeId)
                     .orElseThrow();
 
             if (!employee.isActive()) {

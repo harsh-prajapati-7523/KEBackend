@@ -150,7 +150,8 @@ public class WorkflowService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Display name cannot be blank");
         }
 
-        Employee employee = employeeRepository.findByEmployeeId(employeeId)
+        String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
+        Employee employee = employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
 
         WorkflowTransition transition = new WorkflowTransition();
@@ -206,7 +207,8 @@ public class WorkflowService {
             transition.setSortOrder(request.getSortOrder());
         }
 
-        Employee employee = employeeRepository.findByEmployeeId(employeeId)
+        String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
+        Employee employee = employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
         transition.setUpdatedByEmployee(employee);
 

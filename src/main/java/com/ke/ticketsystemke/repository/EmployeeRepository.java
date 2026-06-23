@@ -11,9 +11,9 @@ import java.util.Optional;
 
 public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
-    Optional<Employee> findByEmployeeId(String employeeId);
+    Optional<Employee> findByEmployeeIdIgnoreCase(String employeeId);
 
-    boolean existsByEmployeeId(String employeeId);
+    boolean existsByEmployeeIdIgnoreCase(String employeeId);
 
     boolean existsByRole(EmployeeRole role);
 

@@ -160,7 +160,8 @@ public class WorkflowStatusService {
     }
 
     private Employee resolveEmployee(String employeeId) {
-        return employeeRepository.findByEmployeeId(employeeId)
+        String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
+        return employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
     }
 }

@@ -12,7 +12,7 @@ public class CreateEmployeeRequest {
     private String name;
 
     @NotBlank
-    @Pattern(regexp = "^[A-Z0-9_]{3,30}$", message = "employeeId must contain 3 to 30 uppercase letters, digits, or underscores")
+    @Pattern(regexp = "^[A-Za-z0-9_]{3,30}$", message = "employeeId must contain 3 to 30 letters, digits, or underscores")
     private String employeeId;
 
     private EmployeeRole role;
