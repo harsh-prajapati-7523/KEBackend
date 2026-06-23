@@ -8,10 +8,12 @@ import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValuesResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.dto.TicketStatusFilterOptionResponse;
+import com.ke.ticketsystemke.dto.TicketWorkflowHistoryPageResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.TicketService;
+import com.ke.ticketsystemke.service.TicketWorkflowHistoryService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,10 +40,16 @@ public class TicketController {
 
     private final TicketService service;
     private final AccessService accessService;
+    private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
 
-    public TicketController(TicketService service, AccessService accessService) {
+    public TicketController(
+            TicketService service,
+            AccessService accessService,
+            TicketWorkflowHistoryService ticketWorkflowHistoryService
+    ) {
         this.service = service;
         this.accessService = accessService;
+        this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
     }
 
     @PostMapping
@@ -103,6 +111,20 @@ public class TicketController {
         accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
         log.info("event=ticket_dynamic_values_requested employeeId={} ticketId={}", employeeId, id);
         return service.getDynamicValues(id, employeeId);
+    }
+
+    @GetMapping("/{id}/workflow-history")
+    public TicketWorkflowHistoryPageResponse getWorkflowHistory(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
+        log.info("event=ticket_workflow_history_requested employeeId={} ticketId={} page={} size={}",
+                employeeId, id, page, size);
+        return ticketWorkflowHistoryService.getTicketWorkflowHistory(id, page, size);
     }
 
     @GetMapping("/{id}/available-actions")

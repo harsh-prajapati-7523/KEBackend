@@ -7,10 +7,16 @@ import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.TicketWorkflowHistory;
 import com.ke.ticketsystemke.entity.WorkflowAction;
 import com.ke.ticketsystemke.entity.WorkflowTransition;
+import com.ke.ticketsystemke.dto.TicketWorkflowHistoryPageResponse;
+import com.ke.ticketsystemke.dto.TicketWorkflowHistoryResponse;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
+import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.TicketWorkflowHistoryRepository;
 import com.ke.ticketsystemke.repository.WorkflowActionRepository;
 import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -31,22 +37,62 @@ public class TicketWorkflowHistoryService {
     private static final int FAILURE_REASON_CODE_MAX_LENGTH = 80;
     private static final int FAILURE_MESSAGE_MAX_LENGTH = 255;
     private static final String SUCCESS_RESULT = "SUCCESS";
+    private static final int DEFAULT_PAGE = 0;
+    private static final int DEFAULT_SIZE = 20;
+    private static final int MAX_SIZE = 100;
 
     private final TicketWorkflowHistoryRepository ticketWorkflowHistoryRepository;
+    private final TicketRepository ticketRepository;
     private final WorkflowActionRepository workflowActionRepository;
     private final WorkflowTransitionRepository workflowTransitionRepository;
     private final EmployeeRepository employeeRepository;
 
     public TicketWorkflowHistoryService(
             TicketWorkflowHistoryRepository ticketWorkflowHistoryRepository,
+            TicketRepository ticketRepository,
             WorkflowActionRepository workflowActionRepository,
             WorkflowTransitionRepository workflowTransitionRepository,
             EmployeeRepository employeeRepository
     ) {
         this.ticketWorkflowHistoryRepository = ticketWorkflowHistoryRepository;
+        this.ticketRepository = ticketRepository;
         this.workflowActionRepository = workflowActionRepository;
         this.workflowTransitionRepository = workflowTransitionRepository;
         this.employeeRepository = employeeRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public TicketWorkflowHistoryPageResponse getTicketWorkflowHistory(
+            Long ticketId,
+            Integer page,
+            Integer size
+    ) {
+        if (!ticketRepository.existsById(ticketId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found");
+        }
+
+        int pageNumber = normalizePage(page);
+        int pageSize = normalizeSize(size);
+        PageRequest pageRequest = PageRequest.of(
+                pageNumber,
+                pageSize,
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        Page<TicketWorkflowHistory> historyPage = ticketWorkflowHistoryRepository.findByTicketId(ticketId, pageRequest);
+        return new TicketWorkflowHistoryPageResponse(
+                ticketId,
+                pageNumber,
+                pageSize,
+                historyPage.getTotalElements(),
+                historyPage.getTotalPages(),
+                historyPage.isFirst(),
+                historyPage.isLast(),
+                historyPage.getContent()
+                        .stream()
+                        .map(TicketWorkflowHistoryResponse::from)
+                        .toList()
+        );
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -155,6 +201,26 @@ public class TicketWorkflowHistoryService {
         sanitized = sanitized.replaceAll(" {2,}", " ");
 
         return sanitized.length() > maxLength ? sanitized.substring(0, maxLength) : sanitized;
+    }
+
+    private int normalizePage(Integer page) {
+        if (page == null) {
+            return DEFAULT_PAGE;
+        }
+        if (page < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page must not be negative");
+        }
+        return page;
+    }
+
+    private int normalizeSize(Integer size) {
+        if (size == null) {
+            return DEFAULT_SIZE;
+        }
+        if (size < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Size must be at least 1");
+        }
+        return Math.min(size, MAX_SIZE);
     }
 
     record HistoryEntryDraft(
