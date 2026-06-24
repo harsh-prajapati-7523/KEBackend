@@ -58,6 +58,31 @@ public class AccessService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public boolean isAllowed(String employeeId, String accessKey) {
+        String normalizedAccessKey = normalizeAccessKey(accessKey);
+        if (normalizedAccessKey == null) {
+            return false;
+        }
+
+        AccessKey systemAccessKey = toSystemAccessKey(normalizedAccessKey, false);
+        if (systemAccessKey != null) {
+            return isAllowed(employeeId, systemAccessKey);
+        }
+
+        try {
+            Employee employee = resolveActiveEmployee(employeeId);
+            Role role = resolveActiveRole(employee);
+            if (isSuperAdmin(role)) {
+                return true;
+            }
+            return isAllowedForRole(role, normalizedAccessKey);
+        } catch (RuntimeException ex) {
+            log.warn("event=access_check_failed employeeId={} accessKey={} decision=deny", employeeId, accessKey);
+            return false;
+        }
+    }
+
     private boolean isAllowedForRole(Role role, String accessKey) {
         return roleAccessRuleRepository.findByRoleIdAndAccessKey(role.getId(), accessKey)
                 .map(RoleAccessRule::isAllowed)
@@ -66,6 +91,14 @@ public class AccessService {
 
     @Transactional(readOnly = true)
     public void requireAllowed(String employeeId, AccessKey accessKey) {
+        if (!isAllowed(employeeId, accessKey)) {
+            log.warn("event=access_denied employeeId={} accessKey={} decision=deny", employeeId, accessKey);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public void requireAllowed(String employeeId, String accessKey) {
         if (!isAllowed(employeeId, accessKey)) {
             log.warn("event=access_denied employeeId={} accessKey={} decision=deny", employeeId, accessKey);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
@@ -107,7 +140,7 @@ public class AccessService {
         if (!superAdmin) {
             List<RoleAccessRule> rules = roleAccessRuleRepository.findAllByRoleId(role.getId());
             for (RoleAccessRule rule : rules) {
-                AccessKey accessKey = toSystemAccessKey(rule.getAccessKey());
+                AccessKey accessKey = toSystemAccessKey(rule.getAccessKey(), true);
                 if (accessKey != null && accessKey != AccessKey.VIEW_DASHBOARD) {
                     access.put(accessKey, rule.isAllowed());
                 }
@@ -116,13 +149,23 @@ public class AccessService {
         return access;
     }
 
-    private AccessKey toSystemAccessKey(String accessKey) {
+    private AccessKey toSystemAccessKey(String accessKey, boolean logUnknown) {
         try {
-            return accessKey == null ? null : AccessKey.valueOf(accessKey);
+            String normalizedAccessKey = normalizeAccessKey(accessKey);
+            return normalizedAccessKey == null ? null : AccessKey.valueOf(normalizedAccessKey);
         } catch (IllegalArgumentException ex) {
-            log.warn("event=unknown_role_access_key accessKey={} decision=ignore", accessKey);
+            if (logUnknown) {
+                log.warn("event=unknown_role_access_key accessKey={} decision=ignore", accessKey);
+            }
             return null;
         }
+    }
+
+    private String normalizeAccessKey(String accessKey) {
+        if (accessKey == null || accessKey.isBlank()) {
+            return null;
+        }
+        return accessKey.trim();
     }
 
     Role resolveActiveRole(Employee employee) {
