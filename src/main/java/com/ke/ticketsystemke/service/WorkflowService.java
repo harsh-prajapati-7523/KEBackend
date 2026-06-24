@@ -69,7 +69,7 @@ public class WorkflowService {
                 return false;
             }
             return workflowTransitionRepository.findByActionKeyAndFromStatusAndToStatus(actionKey, fromStatus, toStatus)
-                    .map(WorkflowTransition::isActive)
+                    .map(transition -> transition.isActive() && hasValidStatusMetadata(transition))
                     .orElse(false);
         } catch (RuntimeException ex) {
             log.warn("event=workflow_transition_check_failed actionKey={} fromStatus={} toStatus={} decision=deny", actionKey, fromStatus, toStatus);
@@ -187,6 +187,7 @@ public class WorkflowService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow transition not found"));
 
         validateWorkflowActionKey(transition.getActionKey());
+        validateTransitionStatusMetadata(transition);
         if (isTerminalStatus(transition.getFromStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terminal workflow transitions cannot be updated");
         }
@@ -251,6 +252,7 @@ public class WorkflowService {
         if (!workflowStatus.isSystemStatus()
                 || !workflowStatus.isProtectedStatus()
                 || !workflowStatus.isActive()
+                || workflowStatus.getBehaviorBucket() != status
                 || !status.name().equals(workflowStatus.getStatusKey())) {
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
@@ -259,6 +261,27 @@ public class WorkflowService {
         }
 
         return workflowStatus;
+    }
+
+    private boolean hasValidStatusMetadata(WorkflowTransition transition) {
+        return isWorkflowStatusMetadataValid(transition.getFromStatusRecord(), transition.getFromStatus())
+                && isWorkflowStatusMetadataValid(transition.getToStatusRecord(), transition.getToStatus());
+    }
+
+    private void validateTransitionStatusMetadata(WorkflowTransition transition) {
+        if (!hasValidStatusMetadata(transition)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow transition status metadata is invalid");
+        }
+    }
+
+    private boolean isWorkflowStatusMetadataValid(WorkflowStatus workflowStatus, TicketStatus expectedStatus) {
+        return workflowStatus != null
+                && expectedStatus != null
+                && workflowStatus.isActive()
+                && workflowStatus.isSystemStatus()
+                && workflowStatus.isProtectedStatus()
+                && workflowStatus.getBehaviorBucket() == expectedStatus
+                && expectedStatus.name().equals(workflowStatus.getStatusKey());
     }
 
     private SafeTransitionOption findSafeTransitionOption(

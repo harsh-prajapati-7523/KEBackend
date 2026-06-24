@@ -509,20 +509,30 @@ ALTER TABLE workflow_transitions
 UPDATE workflow_transitions wt
 SET from_status_id = ws.id
 FROM workflow_statuses ws
-WHERE wt.from_status_id IS NULL
-  AND wt.from_status = ws.status_key
+WHERE wt.from_status = ws.status_key
   AND ws.status_key IN ('NEW', 'PICKED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')
   AND ws.system_status = TRUE
-  AND ws.protected_status = TRUE;
+  AND ws.protected_status = TRUE
+  AND ws.active = TRUE
+  AND ws.behavior_bucket = wt.from_status
+  AND (wt.from_status_id IS NULL OR wt.from_status_id <> ws.id);
 
 UPDATE workflow_transitions wt
 SET to_status_id = ws.id
 FROM workflow_statuses ws
-WHERE wt.to_status_id IS NULL
-  AND wt.to_status = ws.status_key
+WHERE wt.to_status = ws.status_key
   AND ws.status_key IN ('NEW', 'PICKED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')
   AND ws.system_status = TRUE
-  AND ws.protected_status = TRUE;
+  AND ws.protected_status = TRUE
+  AND ws.active = TRUE
+  AND ws.behavior_bucket = wt.to_status
+  AND (wt.to_status_id IS NULL OR wt.to_status_id <> ws.id);
+
+ALTER TABLE workflow_transitions
+    ALTER COLUMN from_status_id SET NOT NULL;
+
+ALTER TABLE workflow_transitions
+    ALTER COLUMN to_status_id SET NOT NULL;
 
 ALTER TABLE workflow_transitions
     DROP CONSTRAINT IF EXISTS fk_workflow_transitions_from_status;

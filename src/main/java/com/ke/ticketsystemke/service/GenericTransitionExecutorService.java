@@ -78,14 +78,19 @@ public class GenericTransitionExecutorService {
     }
 
     private WorkflowStatus resolveWorkflowStatus(WorkflowStatus statusRecord, TicketStatus fallbackStatus) {
-        if (statusRecord != null) {
+        if (isWorkflowStatusMetadataValid(statusRecord, fallbackStatus)) {
             return statusRecord;
         }
-        return workflowStatusRepository.findByStatusKey(fallbackStatus.name())
+
+        WorkflowStatus workflowStatus = workflowStatusRepository.findByStatusKey(fallbackStatus.name())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Workflow status metadata missing"
                 ));
+        if (!isWorkflowStatusMetadataValid(workflowStatus, fallbackStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow status metadata is invalid");
+        }
+        return workflowStatus;
     }
 
     private void validateTransitionActive(WorkflowTransition transition) {
@@ -108,10 +113,7 @@ public class GenericTransitionExecutorService {
     }
 
     private void validateTargetStatus(WorkflowStatus toStatus, TicketStatus targetStatus) {
-        if (!toStatus.isActive()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target workflow status is not active");
-        }
-        if (toStatus.getBehaviorBucket() == null || toStatus.getBehaviorBucket() != targetStatus) {
+        if (!isWorkflowStatusMetadataValid(toStatus, targetStatus)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target workflow status is not supported for generic execution");
         }
         if (!targetStatus.name().equals(toStatus.getStatusKey())) {
@@ -154,6 +156,16 @@ public class GenericTransitionExecutorService {
         return toStatus == TicketStatus.PICKED
                 || toStatus == TicketStatus.COMPLETED
                 || toStatus == TicketStatus.CANCELLED;
+    }
+
+    private boolean isWorkflowStatusMetadataValid(WorkflowStatus workflowStatus, TicketStatus expectedStatus) {
+        return workflowStatus != null
+                && expectedStatus != null
+                && workflowStatus.isActive()
+                && workflowStatus.isSystemStatus()
+                && workflowStatus.isProtectedStatus()
+                && workflowStatus.getBehaviorBucket() == expectedStatus
+                && expectedStatus.name().equals(workflowStatus.getStatusKey());
     }
 
     public record GenericTransitionExecutionPlan(

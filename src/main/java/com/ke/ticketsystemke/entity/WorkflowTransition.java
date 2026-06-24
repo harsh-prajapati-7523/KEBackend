@@ -47,11 +47,11 @@ public class WorkflowTransition {
     private TicketStatus toStatus;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "from_status_id")
+    @JoinColumn(name = "from_status_id", nullable = false)
     private WorkflowStatus fromStatusRecord;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "to_status_id")
+    @JoinColumn(name = "to_status_id", nullable = false)
     private WorkflowStatus toStatusRecord;
 
     @Column(nullable = false)
