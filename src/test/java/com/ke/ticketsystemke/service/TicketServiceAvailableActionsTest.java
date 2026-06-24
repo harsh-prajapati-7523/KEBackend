@@ -2,10 +2,8 @@ package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
 import com.ke.ticketsystemke.entity.AccessKey;
-import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketStatus;
-import com.ke.ticketsystemke.entity.WarrantyStatus;
 import com.ke.ticketsystemke.repository.CategoryFieldConfigRepository;
 import com.ke.ticketsystemke.repository.DropdownOptionRepository;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
@@ -99,8 +97,8 @@ class TicketServiceAvailableActionsTest {
     }
 
     @Test
-    void inProgressOwnerCanSeeCompleteActionBeforeWarrantyIsChecked() {
-        Ticket ticket = inProgressTicket("tech-1", WarrantyStatus.NOT_CHECKED);
+    void inProgressOwnerCanSeeCompleteAction() {
+        Ticket ticket = inProgressTicket("tech-1");
         when(ticketRepository.findById(10L)).thenReturn(Optional.of(ticket));
         when(workflowService.isTransitionAllowed(AccessKey.COMPLETE_TICKET, TicketStatus.IN_PROGRESS, TicketStatus.COMPLETED))
                 .thenReturn(true);
@@ -112,7 +110,7 @@ class TicketServiceAvailableActionsTest {
 
     @Test
     void inProgressAdminCanSeeCancelActionWhenTransitionIsAllowed() {
-        Ticket ticket = inProgressTicket("tech-1", WarrantyStatus.NOT_CHECKED);
+        Ticket ticket = inProgressTicket("tech-1");
         when(ticketRepository.findById(10L)).thenReturn(Optional.of(ticket));
         when(workflowService.isTransitionAllowed(AccessKey.CANCEL_TICKET, TicketStatus.IN_PROGRESS, TicketStatus.CANCELLED))
                 .thenReturn(true);
@@ -122,13 +120,11 @@ class TicketServiceAvailableActionsTest {
         assertThat(response.actions().get(AccessKey.CANCEL_TICKET).available()).isTrue();
     }
 
-    private Ticket inProgressTicket(String pickedByEmployeeId, WarrantyStatus warrantyStatus) {
+    private Ticket inProgressTicket(String pickedByEmployeeId) {
         Ticket ticket = new Ticket();
         ticket.setId(10L);
         ticket.setStatus(TicketStatus.IN_PROGRESS);
         ticket.setPickedByEmployeeId(pickedByEmployeeId);
-        ticket.setWarrantyStatus(warrantyStatus);
-        ticket.setManufacturerStatus(ManufacturerStatus.NOT_REQUIRED);
         return ticket;
     }
 }

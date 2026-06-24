@@ -26,8 +26,6 @@ public interface TicketRepository
                OR LOWER(customer_name) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
                OR LOWER(product_type) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
                OR LOWER(village_or_area) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
-               OR LOWER(manufacturer_or_brand_name) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
-               OR LOWER(product_serial_number) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
             ORDER BY created_at DESC
             """, nativeQuery = true)
     List<Ticket> searchTickets(@Param("query") String query);
@@ -56,15 +54,4 @@ public interface TicketRepository
             """, nativeQuery = true)
     List<String> findVillageSuggestions(@Param("query") String query);
 
-    @Query(value = """
-            SELECT MIN(BTRIM(manufacturer_or_brand_name))
-            FROM tickets
-            WHERE manufacturer_or_brand_name IS NOT NULL
-              AND BTRIM(manufacturer_or_brand_name) <> ''
-              AND LOWER(BTRIM(manufacturer_or_brand_name)) LIKE LOWER(:query) || '%' ESCAPE '\\'
-            GROUP BY LOWER(BTRIM(manufacturer_or_brand_name))
-            ORDER BY COUNT(*) DESC, LOWER(MIN(BTRIM(manufacturer_or_brand_name))) ASC, MIN(BTRIM(manufacturer_or_brand_name)) ASC
-            LIMIT 5
-            """, nativeQuery = true)
-    List<String> findManufacturerSuggestions(@Param("query") String query);
 }

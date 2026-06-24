@@ -36,11 +36,6 @@ public class SuggestionService {
     }
 
     @Transactional(readOnly = true)
-    public List<String> getManufacturers(String query) {
-        return getSuggestions(query, ticketRepository::findManufacturerSuggestions);
-    }
-
-    @Transactional(readOnly = true)
     public List<String> getChargeDescriptions(String query) {
         return getSuggestions(query, chargeItemRepository::findDescriptionSuggestions);
     }

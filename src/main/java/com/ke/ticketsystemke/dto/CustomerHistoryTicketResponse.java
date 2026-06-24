@@ -1,10 +1,8 @@
 package com.ke.ticketsystemke.dto;
 
-import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketCategory;
 import com.ke.ticketsystemke.entity.TicketStatus;
-import com.ke.ticketsystemke.entity.WarrantyStatus;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -20,10 +18,7 @@ public record CustomerHistoryTicketResponse(
         Instant createdAt,
         Instant completedAt,
         Instant cancelledAt,
-        BigDecimal totalCharge,
-        WarrantyStatus warrantyStatus,
-        ManufacturerStatus manufacturerStatus,
-        String manufacturerOrBrandName
+        BigDecimal totalCharge
 ) {
 
     public static CustomerHistoryTicketResponse from(Ticket ticket, BigDecimal totalCharge) {
@@ -37,10 +32,7 @@ public record CustomerHistoryTicketResponse(
                 ticket.getCreatedAt(),
                 ticket.getCompletedAt(),
                 ticket.getCancelledAt(),
-                totalCharge != null ? totalCharge.setScale(2, RoundingMode.UNNECESSARY) : BigDecimal.ZERO.setScale(2),
-                ticket.getWarrantyStatus(),
-                ticket.getManufacturerStatus(),
-                ticket.getManufacturerOrBrandName()
+                totalCharge != null ? totalCharge.setScale(2, RoundingMode.UNNECESSARY) : BigDecimal.ZERO.setScale(2)
         );
     }
 }

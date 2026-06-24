@@ -1,10 +1,8 @@
 package com.ke.ticketsystemke.repository;
 
-import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketCategory;
 import com.ke.ticketsystemke.entity.TicketStatus;
-import com.ke.ticketsystemke.entity.WarrantyStatus;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -23,8 +21,6 @@ public final class TicketSpecifications {
             String search,
             TicketStatus status,
             TicketCategory category,
-            WarrantyStatus warrantyStatus,
-            ManufacturerStatus manufacturerStatus,
             Instant createdFrom,
             Instant createdToExclusive,
             String pickedByEmployeeId
@@ -37,12 +33,6 @@ public final class TicketSpecifications {
             }
             if (category != null) {
                 predicates.add(criteriaBuilder.equal(root.get("category"), category));
-            }
-            if (warrantyStatus != null) {
-                predicates.add(criteriaBuilder.equal(root.get("warrantyStatus"), warrantyStatus));
-            }
-            if (manufacturerStatus != null) {
-                predicates.add(criteriaBuilder.equal(root.get("manufacturerStatus"), manufacturerStatus));
             }
             if (createdFrom != null) {
                 predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), createdFrom));
@@ -60,9 +50,7 @@ public final class TicketSpecifications {
                         contains(criteriaBuilder, root.get("mobileNumber"), pattern),
                         contains(criteriaBuilder, root.get("customerName"), pattern),
                         contains(criteriaBuilder, root.get("productType"), pattern),
-                        contains(criteriaBuilder, root.get("villageOrArea"), pattern),
-                        contains(criteriaBuilder, root.get("manufacturerOrBrandName"), pattern),
-                        contains(criteriaBuilder, root.get("productSerialNumber"), pattern)
+                        contains(criteriaBuilder, root.get("villageOrArea"), pattern)
                 ));
             }
 

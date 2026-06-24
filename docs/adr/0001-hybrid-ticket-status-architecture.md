@@ -29,7 +29,7 @@ Fixed workflow actions still have behavior that is larger than a status update:
 
 - pick ticket assigns ownership
 - start work updates ownership and operational state
-- complete ticket enforces warranty and authorization rules, then writes completion fields
+- complete ticket enforces authorization rules, then writes completion fields
 - cancel ticket enforces admin authorization, then writes cancellation fields
 
 Generic execution intentionally avoids these fixed-action side effects. It also blocks protected fixed action keys, protected transitions, terminal transitions, and target statuses that require unsupported business side effects.

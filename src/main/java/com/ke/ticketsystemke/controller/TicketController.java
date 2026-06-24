@@ -12,7 +12,6 @@ import com.ke.ticketsystemke.dto.TicketDynamicValuesResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.dto.TicketStatusFilterOptionResponse;
 import com.ke.ticketsystemke.dto.TicketWorkflowHistoryPageResponse;
-import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.service.AccessService;
 import com.ke.ticketsystemke.service.GenericTransitionExecutorService;
@@ -25,7 +24,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -205,8 +203,6 @@ public class TicketController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) String warrantyStatus,
-            @RequestParam(required = false) String manufacturerStatus,
             @RequestParam(required = false) String createdFrom,
             @RequestParam(required = false) String createdTo,
             @RequestParam(required = false) String mine,
@@ -222,8 +218,6 @@ public class TicketController {
                 mineRequested,
                 status,
                 category,
-                warrantyStatus,
-                manufacturerStatus,
                 createdFrom,
                 createdTo
         );
@@ -234,8 +228,6 @@ public class TicketController {
                 search,
                 status,
                 category,
-                warrantyStatus,
-                manufacturerStatus,
                 createdFrom,
                 createdTo,
                 mine,
@@ -301,18 +293,6 @@ public class TicketController {
         TicketResponse resp = service.cancelTicket(id, request, employeeId, role);
         log.info("event=ticket_cancelled ticketId={} ticketNumber={} employeeId={}", resp.id(), resp.ticketNumber(), employeeId);
         return resp;
-    }
-
-    @PatchMapping("/{id}/warranty")
-    public TicketResponse updateWarranty(
-            @PathVariable Long id,
-            @Valid @RequestBody UpdateWarrantyRequest request,
-            Authentication authentication
-    ) {
-        String employeeId = authentication.getName();
-        accessService.requireAllowed(employeeId, AccessKey.UPDATE_WARRANTY);
-        String role = extractRole(authentication);
-        return service.updateWarranty(id, request, employeeId, role);
     }
 
     private String extractRole(Authentication authentication) {

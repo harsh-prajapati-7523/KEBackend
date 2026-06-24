@@ -44,14 +44,6 @@ public class SuggestionController {
         return getSuggestions("villageOrArea", query, authentication, suggestionService::getVillages);
     }
 
-    @GetMapping("/manufacturers")
-    public List<String> getManufacturers(
-            @RequestParam(required = false) String query,
-            Authentication authentication
-    ) {
-        return getSuggestions("manufacturerOrBrandName", query, authentication, suggestionService::getManufacturers);
-    }
-
     @GetMapping("/charge-descriptions")
     public List<String> getChargeDescriptions(
             @RequestParam(required = false) String query,

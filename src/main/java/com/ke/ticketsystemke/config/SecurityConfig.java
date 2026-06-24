@@ -144,11 +144,6 @@ public class SecurityConfig {
                         .authenticated()
 
                         .requestMatchers(
-                                HttpMethod.PATCH,
-                                "/volt/tickets/*/warranty")
-                        .authenticated()
-
-                        .requestMatchers(
                                 HttpMethod.GET,
                                 "/volt/tickets/*/charges")
                         .authenticated()
