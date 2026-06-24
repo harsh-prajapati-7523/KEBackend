@@ -161,6 +161,61 @@ public class TicketWorkflowHistoryService {
         ticketWorkflowHistoryRepository.save(history);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordSuccessfulGenericAction(
+            Ticket ticket,
+            WorkflowAction workflowAction,
+            WorkflowTransition workflowTransition,
+            TicketStatus fromStatus,
+            TicketStatus toStatus,
+            Long fromStatusId,
+            Long toStatusId,
+            String executedByEmployeeId,
+            String comment,
+            String reason,
+            boolean systemTransition,
+            boolean customTransition
+    ) {
+        if (ticket == null || ticket.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Ticket audit context missing");
+        }
+        if (workflowAction == null || workflowTransition == null || fromStatus == null || toStatus == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Workflow audit context missing");
+        }
+
+        String employeeNameSnapshot = employeeRepository.findByEmployeeIdIgnoreCase(
+                        executedByEmployeeId == null ? "" : executedByEmployeeId.trim()
+                )
+                .map(Employee::getName)
+                .orElse(null);
+
+        TicketWorkflowHistory history = prepareHistoryEntry(new HistoryEntryDraft(
+                ticket.getId(),
+                ticket.getTicketNumber(),
+                workflowAction.getActionKey(),
+                workflowAction.getId(),
+                workflowTransition.getId(),
+                fromStatus.name(),
+                toStatus.name(),
+                fromStatusId,
+                toStatusId,
+                executedByEmployeeId,
+                employeeNameSnapshot,
+                null,
+                null,
+                comment,
+                reason,
+                SUCCESS_RESULT,
+                null,
+                null,
+                systemTransition,
+                customTransition,
+                null
+        ));
+
+        ticketWorkflowHistoryRepository.save(history);
+    }
+
     TicketWorkflowHistory prepareHistoryEntry(HistoryEntryDraft draft) {
         TicketWorkflowHistory history = new TicketWorkflowHistory();
         history.setTicketId(draft.ticketId());

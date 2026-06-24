@@ -4,6 +4,7 @@ import com.ke.ticketsystemke.dto.CancelTicketRequest;
 import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
+import com.ke.ticketsystemke.dto.GenericTransitionExecutionRequest;
 import com.ke.ticketsystemke.dto.GenericTransitionPreviewRequest;
 import com.ke.ticketsystemke.dto.GenericTransitionPreviewResponse;
 import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
@@ -159,6 +160,26 @@ public class TicketController {
                 ? new GenericTransitionPreviewRequest()
                 : request;
         return genericTransitionExecutorService.previewTransition(id, transitionId, employeeId, safeRequest);
+    }
+
+    @PostMapping("/{id}/workflow-transitions/{transitionId}/execute")
+    public TicketResponse executeWorkflowTransition(
+            @PathVariable Long id,
+            @PathVariable Long transitionId,
+            @Valid @RequestBody(required = false) GenericTransitionExecutionRequest request,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
+        log.info("event=ticket_workflow_transition_execute_requested employeeId={} ticketId={} transitionId={}",
+                employeeId, id, transitionId);
+        GenericTransitionExecutionRequest safeRequest = request == null
+                ? new GenericTransitionExecutionRequest()
+                : request;
+        TicketResponse response = genericTransitionExecutorService.executeTransition(id, transitionId, employeeId, safeRequest);
+        log.info("event=ticket_workflow_transition_executed employeeId={} ticketId={} transitionId={} ticketNumber={}",
+                employeeId, response.id(), transitionId, response.ticketNumber());
+        return response;
     }
 
     @GetMapping("/search")

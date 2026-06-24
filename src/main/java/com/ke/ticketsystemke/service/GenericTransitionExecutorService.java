@@ -1,7 +1,10 @@
 package com.ke.ticketsystemke.service;
 
+import com.ke.ticketsystemke.dto.GenericTransitionExecutionRequest;
 import com.ke.ticketsystemke.dto.GenericTransitionPreviewRequest;
 import com.ke.ticketsystemke.dto.GenericTransitionPreviewResponse;
+import com.ke.ticketsystemke.dto.TicketResponse;
+import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WorkflowAction;
@@ -20,6 +23,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class GenericTransitionExecutorService {
 
     private static final String GENERIC_DISABLED_REASON = "Not available for this ticket.";
+    private static final java.util.List<String> PROTECTED_FIXED_ACTION_KEYS = java.util.List.of(
+            AccessKey.PICK_TICKET.name(),
+            AccessKey.START_WORK.name(),
+            AccessKey.COMPLETE_TICKET.name(),
+            AccessKey.CANCEL_TICKET.name()
+    );
 
     private final TicketRepository ticketRepository;
     private final WorkflowTransitionRepository workflowTransitionRepository;
@@ -27,6 +36,8 @@ public class GenericTransitionExecutorService {
     private final WorkflowStatusRepository workflowStatusRepository;
     private final EffectiveStatusResolver effectiveStatusResolver;
     private final AccessService accessService;
+    private final TicketChargeService ticketChargeService;
+    private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
 
     public GenericTransitionExecutorService(
             TicketRepository ticketRepository,
@@ -34,7 +45,9 @@ public class GenericTransitionExecutorService {
             WorkflowActionRepository workflowActionRepository,
             WorkflowStatusRepository workflowStatusRepository,
             EffectiveStatusResolver effectiveStatusResolver,
-            AccessService accessService
+            AccessService accessService,
+            TicketChargeService ticketChargeService,
+            TicketWorkflowHistoryService ticketWorkflowHistoryService
     ) {
         this.ticketRepository = ticketRepository;
         this.workflowTransitionRepository = workflowTransitionRepository;
@@ -42,6 +55,8 @@ public class GenericTransitionExecutorService {
         this.workflowStatusRepository = workflowStatusRepository;
         this.effectiveStatusResolver = effectiveStatusResolver;
         this.accessService = accessService;
+        this.ticketChargeService = ticketChargeService;
+        this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
     }
 
     @Transactional(readOnly = true)
@@ -78,6 +93,45 @@ public class GenericTransitionExecutorService {
             }
             return GenericTransitionPreviewResponse.denied(ticketId, workflowTransitionId, GENERIC_DISABLED_REASON);
         }
+    }
+
+    @Transactional
+    public TicketResponse executeTransition(
+            Long ticketId,
+            Long workflowTransitionId,
+            String employeeId,
+            GenericTransitionExecutionRequest request
+    ) {
+        GenericTransitionExecutionPlan plan = prepareExecution(ticketId, workflowTransitionId, employeeId);
+        Ticket ticket = plan.ticket();
+        WorkflowTransition transition = plan.transition();
+        TicketStatus fromStatus = ticket.getStatus();
+        Long fromStatusId = plan.fromStatus().getId();
+
+        ticket.setStatus(transition.getToStatus());
+        ticket.setStatusRecord(plan.toStatus());
+
+        Ticket saved = ticketRepository.save(ticket);
+        ticketWorkflowHistoryService.recordSuccessfulGenericAction(
+                saved,
+                plan.action(),
+                transition,
+                fromStatus,
+                transition.getToStatus(),
+                fromStatusId,
+                plan.toStatus().getId(),
+                employeeId,
+                request == null ? null : request.getComment(),
+                request == null ? null : request.getReason(),
+                plan.systemTransition(),
+                plan.customTransition()
+        );
+
+        return TicketResponse.from(
+                saved,
+                ticketChargeService.calculateTotalCharge(saved.getId()),
+                effectiveStatusResolver.resolve(saved)
+        );
     }
 
     @Transactional(readOnly = true)
@@ -183,6 +237,7 @@ public class GenericTransitionExecutorService {
     ) {
         if (transition.isProtectedTransition()
                 || action.isProtectedAction()
+                || PROTECTED_FIXED_ACTION_KEYS.contains(action.getActionKey())
                 || fromStatus.isTerminal()
                 || toStatus.isTerminal()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transition requires dedicated workflow handling");
