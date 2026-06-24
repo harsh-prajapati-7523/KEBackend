@@ -4,6 +4,8 @@ import com.ke.ticketsystemke.dto.CancelTicketRequest;
 import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
+import com.ke.ticketsystemke.dto.GenericTransitionPreviewRequest;
+import com.ke.ticketsystemke.dto.GenericTransitionPreviewResponse;
 import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValuesResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
@@ -12,6 +14,7 @@ import com.ke.ticketsystemke.dto.TicketWorkflowHistoryPageResponse;
 import com.ke.ticketsystemke.dto.UpdateWarrantyRequest;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.service.AccessService;
+import com.ke.ticketsystemke.service.GenericTransitionExecutorService;
 import com.ke.ticketsystemke.service.TicketService;
 import com.ke.ticketsystemke.service.TicketWorkflowHistoryService;
 import jakarta.validation.Valid;
@@ -41,15 +44,18 @@ public class TicketController {
     private final TicketService service;
     private final AccessService accessService;
     private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
+    private final GenericTransitionExecutorService genericTransitionExecutorService;
 
     public TicketController(
             TicketService service,
             AccessService accessService,
-            TicketWorkflowHistoryService ticketWorkflowHistoryService
+            TicketWorkflowHistoryService ticketWorkflowHistoryService,
+            GenericTransitionExecutorService genericTransitionExecutorService
     ) {
         this.service = service;
         this.accessService = accessService;
         this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
+        this.genericTransitionExecutorService = genericTransitionExecutorService;
     }
 
     @PostMapping
@@ -136,6 +142,23 @@ public class TicketController {
         String role = extractRole(authentication);
         log.info("event=ticket_available_actions_requested employeeId={} ticketId={}", employeeId, id);
         return service.getAvailableActions(id, employeeId, role);
+    }
+
+    @PostMapping("/{id}/workflow-transitions/{transitionId}/preview")
+    public GenericTransitionPreviewResponse previewWorkflowTransition(
+            @PathVariable Long id,
+            @PathVariable Long transitionId,
+            @Valid @RequestBody(required = false) GenericTransitionPreviewRequest request,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
+        log.info("event=ticket_workflow_transition_preview_requested employeeId={} ticketId={} transitionId={}",
+                employeeId, id, transitionId);
+        GenericTransitionPreviewRequest safeRequest = request == null
+                ? new GenericTransitionPreviewRequest()
+                : request;
+        return genericTransitionExecutorService.previewTransition(id, transitionId, employeeId, safeRequest);
     }
 
     @GetMapping("/search")

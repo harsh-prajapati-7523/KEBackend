@@ -1,5 +1,7 @@
 package com.ke.ticketsystemke.service;
 
+import com.ke.ticketsystemke.dto.GenericTransitionPreviewRequest;
+import com.ke.ticketsystemke.dto.GenericTransitionPreviewResponse;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WorkflowAction;
@@ -16,6 +18,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class GenericTransitionExecutorService {
+
+    private static final String GENERIC_DISABLED_REASON = "Not available for this ticket.";
 
     private final TicketRepository ticketRepository;
     private final WorkflowTransitionRepository workflowTransitionRepository;
@@ -38,6 +42,42 @@ public class GenericTransitionExecutorService {
         this.workflowStatusRepository = workflowStatusRepository;
         this.effectiveStatusResolver = effectiveStatusResolver;
         this.accessService = accessService;
+    }
+
+    @Transactional(readOnly = true)
+    public GenericTransitionPreviewResponse previewTransition(
+            Long ticketId,
+            Long workflowTransitionId,
+            String employeeId,
+            GenericTransitionPreviewRequest request
+    ) {
+        try {
+            GenericTransitionExecutionPlan plan = prepareExecution(ticketId, workflowTransitionId, employeeId);
+            WorkflowTransition transition = plan.transition();
+            WorkflowAction action = plan.action();
+            WorkflowStatus fromStatus = plan.fromStatus();
+            WorkflowStatus toStatus = plan.toStatus();
+
+            return new GenericTransitionPreviewResponse(
+                    ticketId,
+                    workflowTransitionId,
+                    true,
+                    action.getActionKey(),
+                    action.getDisplayName(),
+                    transition.getFromStatus().name(),
+                    transition.getToStatus().name(),
+                    fromStatus.getDisplayName(),
+                    toStatus.getDisplayName(),
+                    action.isRequiresComment(),
+                    false,
+                    null
+            );
+        } catch (ResponseStatusException ex) {
+            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                throw ex;
+            }
+            return GenericTransitionPreviewResponse.denied(ticketId, workflowTransitionId, GENERIC_DISABLED_REASON);
+        }
     }
 
     @Transactional(readOnly = true)
