@@ -74,7 +74,6 @@ public class TicketService {
     private static final String STATUS_NOT_ALLOWED = "STATUS_NOT_ALLOWED";
     private static final String OWNER_REQUIRED = "OWNER_REQUIRED";
     private static final String ADMIN_REQUIRED = "ADMIN_REQUIRED";
-    private static final String WARRANTY_NOT_CHECKED = "WARRANTY_NOT_CHECKED";
     private static final String TERMINAL_STATUS = "TERMINAL_STATUS";
     private static final List<String> PROTECTED_FIXED_ACTION_KEYS = List.of(
             AccessKey.PICK_TICKET.name(),
@@ -594,13 +593,6 @@ public class TicketService {
             return unavailable(
                     OWNER_REQUIRED,
                     "Only the assigned technician or admin can complete this ticket."
-            );
-        }
-
-        if (ticket.getWarrantyStatus() == WarrantyStatus.NOT_CHECKED) {
-            return unavailable(
-                    WARRANTY_NOT_CHECKED,
-                    "Warranty must be checked before completing the ticket."
             );
         }
 
