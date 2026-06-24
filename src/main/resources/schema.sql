@@ -300,6 +300,18 @@ ALTER TABLE workflow_transitions
     ALTER COLUMN updated_at SET DEFAULT now();
 
 ALTER TABLE workflow_transitions
+    ADD COLUMN IF NOT EXISTS from_status_id BIGINT;
+
+ALTER TABLE workflow_transitions
+    ADD COLUMN IF NOT EXISTS to_status_id BIGINT;
+
+ALTER TABLE workflow_transitions
+    ALTER COLUMN from_status_id DROP NOT NULL;
+
+ALTER TABLE workflow_transitions
+    ALTER COLUMN to_status_id DROP NOT NULL;
+
+ALTER TABLE workflow_transitions
     DROP CONSTRAINT IF EXISTS ck_workflow_transitions_action_key;
 
 ALTER TABLE workflow_transitions
@@ -499,12 +511,6 @@ SET
     behavior_bucket = EXCLUDED.behavior_bucket,
     sort_order = EXCLUDED.sort_order,
     updated_at = now();
-
-ALTER TABLE workflow_transitions
-    ADD COLUMN IF NOT EXISTS from_status_id BIGINT;
-
-ALTER TABLE workflow_transitions
-    ADD COLUMN IF NOT EXISTS to_status_id BIGINT;
 
 UPDATE workflow_transitions wt
 SET from_status_id = ws.id
