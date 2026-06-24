@@ -1,6 +1,5 @@
 package com.ke.ticketsystemke.dto;
 
-import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WorkflowTransition;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
@@ -10,7 +9,7 @@ import java.util.Locale;
 
 public record WorkflowTransitionResponse(
         Long id,
-        AccessKey actionKey,
+        String actionKey,
         String displayName,
         TicketStatus fromStatus,
         Long fromStatusId,

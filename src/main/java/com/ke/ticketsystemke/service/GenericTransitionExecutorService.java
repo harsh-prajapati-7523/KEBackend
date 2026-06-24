@@ -51,7 +51,7 @@ public class GenericTransitionExecutorService {
         ResolvedTicketStatus currentStatus = effectiveStatusResolver.resolve(ticket);
         WorkflowTransition transition = workflowTransitionRepository.findById(workflowTransitionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow transition not found"));
-        WorkflowAction action = workflowActionRepository.findByActionKey(transition.getActionKey().name())
+        WorkflowAction action = workflowActionRepository.findByActionKey(transition.getActionKey())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow action metadata missing"));
         WorkflowStatus fromStatus = resolveWorkflowStatus(transition.getFromStatusRecord(), transition.getFromStatus());
         WorkflowStatus toStatus = resolveWorkflowStatus(transition.getToStatusRecord(), transition.getToStatus());

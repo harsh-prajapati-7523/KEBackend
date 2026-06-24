@@ -16,6 +16,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
+import java.util.Locale;
 
 @Entity
 @Table(
@@ -31,9 +32,8 @@ public class WorkflowTransition {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "action_key", nullable = false, length = 60)
-    private AccessKey actionKey;
+    private String actionKey;
 
     @Column(name = "display_name", nullable = false, length = 80)
     private String displayName;
@@ -80,12 +80,24 @@ public class WorkflowTransition {
         return id;
     }
 
-    public AccessKey getActionKey() {
+    public String getActionKey() {
         return actionKey;
     }
 
+    public void setActionKey(String actionKey) {
+        this.actionKey = normalizeActionKey(actionKey);
+    }
+
     public void setActionKey(AccessKey actionKey) {
-        this.actionKey = actionKey;
+        this.actionKey = actionKey == null ? null : actionKey.name();
+    }
+
+    public AccessKey getSystemActionKey() {
+        try {
+            return actionKey == null ? null : AccessKey.valueOf(actionKey);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     public String getDisplayName() {
@@ -178,6 +190,7 @@ public class WorkflowTransition {
 
     @PrePersist
     void setCreationTimestamp() {
+        actionKey = normalizeActionKey(actionKey);
         Instant now = Instant.now();
         if (createdAt == null) {
             createdAt = now;
@@ -189,6 +202,14 @@ public class WorkflowTransition {
 
     @PreUpdate
     void setUpdateTimestamp() {
+        actionKey = normalizeActionKey(actionKey);
         updatedAt = Instant.now();
+    }
+
+    private String normalizeActionKey(String actionKey) {
+        if (actionKey == null || actionKey.isBlank()) {
+            return null;
+        }
+        return actionKey.trim().toUpperCase(Locale.ROOT);
     }
 }

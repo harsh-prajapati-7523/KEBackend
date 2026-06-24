@@ -229,6 +229,14 @@ public class WorkflowService {
         }
     }
 
+    private void validateWorkflowActionKey(String actionKey) {
+        try {
+            validateWorkflowActionKey(actionKey == null ? null : AccessKey.valueOf(actionKey));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid workflow action key");
+        }
+    }
+
     private boolean isTerminalStatus(TicketStatus status) {
         return status == TicketStatus.COMPLETED || status == TicketStatus.CANCELLED;
     }
@@ -258,7 +266,7 @@ public class WorkflowService {
             TicketStatus fromStatus,
             TicketStatus toStatus
     ) {
-        TransitionKey key = new TransitionKey(actionKey, fromStatus, toStatus);
+        TransitionKey key = new TransitionKey(actionKey == null ? null : actionKey.name(), fromStatus, toStatus);
         return SAFE_TRANSITION_OPTIONS.stream()
                 .filter(option -> option.key().equals(key))
                 .findFirst()
@@ -292,12 +300,12 @@ public class WorkflowService {
     ) {
 
         private TransitionKey key() {
-            return new TransitionKey(actionKey, fromStatus, toStatus);
+            return new TransitionKey(actionKey.name(), fromStatus, toStatus);
         }
     }
 
     private record TransitionKey(
-            AccessKey actionKey,
+            String actionKey,
             TicketStatus fromStatus,
             TicketStatus toStatus
     ) {

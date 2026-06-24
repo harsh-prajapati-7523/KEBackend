@@ -266,12 +266,7 @@ CREATE TABLE IF NOT EXISTS workflow_transitions (
     CONSTRAINT fk_workflow_transitions_updated_by_employee FOREIGN KEY (updated_by_employee_id)
         REFERENCES employees(id),
     CONSTRAINT uk_workflow_transitions_action_from_to UNIQUE (action_key, from_status, to_status),
-    CONSTRAINT ck_workflow_transitions_action_key CHECK (action_key IN (
-        'PICK_TICKET',
-        'START_WORK',
-        'COMPLETE_TICKET',
-        'CANCEL_TICKET'
-    )),
+    CONSTRAINT ck_workflow_transitions_action_key_format CHECK (action_key ~ '^[A-Z0-9_]{2,60}$'),
     CONSTRAINT ck_workflow_transitions_from_status CHECK (from_status IN (
         'NEW',
         'PICKED',
@@ -303,6 +298,21 @@ ALTER TABLE workflow_transitions
 
 ALTER TABLE workflow_transitions
     ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE workflow_transitions
+    DROP CONSTRAINT IF EXISTS ck_workflow_transitions_action_key;
+
+ALTER TABLE workflow_transitions
+    DROP CONSTRAINT IF EXISTS ck_workflow_transitions_action_key_format;
+
+UPDATE workflow_transitions
+SET action_key = UPPER(BTRIM(action_key))
+WHERE action_key IS NOT NULL
+  AND action_key <> UPPER(BTRIM(action_key));
+
+ALTER TABLE workflow_transitions
+    ADD CONSTRAINT ck_workflow_transitions_action_key_format
+    CHECK (action_key ~ '^[A-Z0-9_]{2,60}$');
 
 CREATE INDEX IF NOT EXISTS idx_workflow_transitions_action_from_active
     ON workflow_transitions(action_key, from_status, active);
