@@ -8,6 +8,7 @@ import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
 import com.ke.ticketsystemke.dto.CustomerHistoryTicketResponse;
 import com.ke.ticketsystemke.dto.TicketActionAvailabilityResponse;
 import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
+import com.ke.ticketsystemke.dto.TicketDynamicActionResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValueResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValuesResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
@@ -27,6 +28,7 @@ import com.ke.ticketsystemke.entity.TicketFieldType;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WarrantyStatus;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
+import com.ke.ticketsystemke.entity.WorkflowTransition;
 import com.ke.ticketsystemke.repository.CategoryFieldConfigRepository;
 import com.ke.ticketsystemke.repository.DropdownOptionRepository;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
@@ -34,6 +36,7 @@ import com.ke.ticketsystemke.repository.TicketDynamicValueRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.TicketSpecifications;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
+import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -73,6 +76,12 @@ public class TicketService {
     private static final String ADMIN_REQUIRED = "ADMIN_REQUIRED";
     private static final String WARRANTY_NOT_CHECKED = "WARRANTY_NOT_CHECKED";
     private static final String TERMINAL_STATUS = "TERMINAL_STATUS";
+    private static final List<String> PROTECTED_FIXED_ACTION_KEYS = List.of(
+            AccessKey.PICK_TICKET.name(),
+            AccessKey.START_WORK.name(),
+            AccessKey.COMPLETE_TICKET.name(),
+            AccessKey.CANCEL_TICKET.name()
+    );
 
     private final TicketRepository repository;
     private final TicketCategoryRepository ticketCategoryRepository;
@@ -83,7 +92,9 @@ public class TicketService {
     private final WorkflowService workflowService;
     private final AccessService accessService;
     private final WorkflowStatusRepository workflowStatusRepository;
+    private final WorkflowTransitionRepository workflowTransitionRepository;
     private final EffectiveStatusResolver effectiveStatusResolver;
+    private final GenericTransitionExecutorService genericTransitionExecutorService;
     private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
 
     public TicketService(
@@ -96,7 +107,9 @@ public class TicketService {
             WorkflowService workflowService,
             AccessService accessService,
             WorkflowStatusRepository workflowStatusRepository,
+            WorkflowTransitionRepository workflowTransitionRepository,
             EffectiveStatusResolver effectiveStatusResolver,
+            GenericTransitionExecutorService genericTransitionExecutorService,
             TicketWorkflowHistoryService ticketWorkflowHistoryService
     ) {
         this.repository = repository;
@@ -108,7 +121,9 @@ public class TicketService {
         this.workflowService = workflowService;
         this.accessService = accessService;
         this.workflowStatusRepository = workflowStatusRepository;
+        this.workflowTransitionRepository = workflowTransitionRepository;
         this.effectiveStatusResolver = effectiveStatusResolver;
+        this.genericTransitionExecutorService = genericTransitionExecutorService;
         this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
     }
 
@@ -169,9 +184,10 @@ public class TicketService {
         actions.put(AccessKey.START_WORK, evaluateStartWorkAvailability(ticket, employeeId));
         actions.put(AccessKey.COMPLETE_TICKET, evaluateCompleteAvailability(ticket, employeeId, role));
         actions.put(AccessKey.CANCEL_TICKET, evaluateCancelAvailability(ticket, employeeId, role));
+        List<TicketDynamicActionResponse> dynamicActions = evaluateDynamicActions(ticket, employeeId);
 
         log.info("event=ticket_available_actions_returned employeeId={} ticketId={}", employeeId, ticketId);
-        return new TicketAvailableActionsResponse(ticket.getId(), actions);
+        return new TicketAvailableActionsResponse(ticket.getId(), actions, dynamicActions);
     }
 
     @Transactional
@@ -485,6 +501,53 @@ public class TicketService {
 
     private boolean isOperationalRole(String role) {
         return isAdminRole(role) || "EMPLOYEE".equals(role) || "TECHNICIAN".equals(role);
+    }
+
+    private List<TicketDynamicActionResponse> evaluateDynamicActions(Ticket ticket, String employeeId) {
+        if (ticket.getStatus() == null) {
+            return List.of();
+        }
+
+        List<TicketDynamicActionResponse> dynamicActions = new ArrayList<>();
+        List<WorkflowTransition> candidates = workflowTransitionRepository
+                .findByFromStatusAndActiveTrueOrderBySortOrderAscIdAsc(ticket.getStatus());
+        for (WorkflowTransition candidate : candidates) {
+            if (isProtectedFixedAction(candidate.getActionKey())) {
+                continue;
+            }
+            try {
+                GenericTransitionExecutorService.GenericTransitionExecutionPlan plan =
+                        genericTransitionExecutorService.prepareExecution(ticket.getId(), candidate.getId(), employeeId);
+                dynamicActions.add(toDynamicActionResponse(plan));
+            } catch (ResponseStatusException ex) {
+                log.debug(
+                        "event=ticket_dynamic_action_hidden ticketId={} transitionId={} status={} reason={}",
+                        ticket.getId(),
+                        candidate.getId(),
+                        ex.getStatusCode(),
+                        ex.getReason()
+                );
+            }
+        }
+        return dynamicActions;
+    }
+
+    private boolean isProtectedFixedAction(String actionKey) {
+        return actionKey != null && PROTECTED_FIXED_ACTION_KEYS.contains(actionKey);
+    }
+
+    private TicketDynamicActionResponse toDynamicActionResponse(
+            GenericTransitionExecutorService.GenericTransitionExecutionPlan plan
+    ) {
+        WorkflowTransition transition = plan.transition();
+        return new TicketDynamicActionResponse(
+                transition.getId(),
+                plan.action().getActionKey(),
+                plan.action().getDisplayName(),
+                transition.getFromStatus().name(),
+                transition.getToStatus().name(),
+                true
+        );
     }
 
     private TicketActionAvailabilityResponse evaluatePickAvailability(Ticket ticket, String employeeId) {
