@@ -275,13 +275,7 @@ public class WorkflowService {
     }
 
     private boolean isWorkflowStatusMetadataValid(WorkflowStatus workflowStatus, TicketStatus expectedStatus) {
-        return workflowStatus != null
-                && expectedStatus != null
-                && workflowStatus.isActive()
-                && workflowStatus.isSystemStatus()
-                && workflowStatus.isProtectedStatus()
-                && workflowStatus.getBehaviorBucket() == expectedStatus
-                && expectedStatus.name().equals(workflowStatus.getStatusKey());
+        return WorkflowStatusValidationHelper.isSystemStatusMetadataValid(workflowStatus, expectedStatus);
     }
 
     private SafeTransitionOption findSafeTransitionOption(
