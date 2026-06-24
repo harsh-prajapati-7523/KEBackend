@@ -38,6 +38,8 @@ public class GenericTransitionExecutorService {
     private final AccessService accessService;
     private final TicketChargeService ticketChargeService;
     private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
+    private final WorkflowTransitionRoleScopeValidator workflowTransitionRoleScopeValidator;
+    private final WorkflowTransitionCategoryScopeValidator workflowTransitionCategoryScopeValidator;
 
     public GenericTransitionExecutorService(
             TicketRepository ticketRepository,
@@ -47,7 +49,9 @@ public class GenericTransitionExecutorService {
             EffectiveStatusResolver effectiveStatusResolver,
             AccessService accessService,
             TicketChargeService ticketChargeService,
-            TicketWorkflowHistoryService ticketWorkflowHistoryService
+            TicketWorkflowHistoryService ticketWorkflowHistoryService,
+            WorkflowTransitionRoleScopeValidator workflowTransitionRoleScopeValidator,
+            WorkflowTransitionCategoryScopeValidator workflowTransitionCategoryScopeValidator
     ) {
         this.ticketRepository = ticketRepository;
         this.workflowTransitionRepository = workflowTransitionRepository;
@@ -57,6 +61,8 @@ public class GenericTransitionExecutorService {
         this.accessService = accessService;
         this.ticketChargeService = ticketChargeService;
         this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
+        this.workflowTransitionRoleScopeValidator = workflowTransitionRoleScopeValidator;
+        this.workflowTransitionCategoryScopeValidator = workflowTransitionCategoryScopeValidator;
     }
 
     @Transactional(readOnly = true)
@@ -108,7 +114,7 @@ public class GenericTransitionExecutorService {
         TicketStatus fromStatus = ticket.getStatus();
         Long fromStatusId = plan.fromStatus().getId();
 
-        ticket.setStatus(transition.getToStatus());
+        ticket.setStatus(plan.toStatusBehaviorBucket());
         ticket.setStatusRecord(plan.toStatus());
 
         Ticket saved = ticketRepository.save(ticket);
@@ -117,7 +123,7 @@ public class GenericTransitionExecutorService {
                 plan.action(),
                 transition,
                 fromStatus,
-                transition.getToStatus(),
+                plan.toStatusBehaviorBucket(),
                 fromStatusId,
                 plan.toStatus().getId(),
                 employeeId,
@@ -152,11 +158,13 @@ public class GenericTransitionExecutorService {
 
         validateTransitionActive(transition);
         validateCurrentStatus(ticket, currentStatus, transition);
-        validateTargetStatus(toStatus, transition.getToStatus());
+        TicketStatus toStatusBehaviorBucket = resolveTargetStatusBehaviorBucket(toStatus, transition.getToStatus());
         validateAction(action);
         accessService.requireAllowed(employeeId, action.getActionKey());
         validateTerminalProtection(currentStatus);
-        validateTransitionEligibility(transition, action, fromStatus, toStatus);
+        validateTransitionEligibility(transition, action, fromStatus, toStatus, toStatusBehaviorBucket);
+        workflowTransitionRoleScopeValidator.requireAllowed(transition, employeeId);
+        workflowTransitionCategoryScopeValidator.requireAllowed(transition, ticket);
 
         return new GenericTransitionExecutionPlan(
                 ticket,
@@ -164,16 +172,21 @@ public class GenericTransitionExecutorService {
                 action,
                 fromStatus,
                 toStatus,
+                toStatusBehaviorBucket,
                 currentStatus,
                 employeeId,
                 transition.isSystemTransition(),
-                !transition.isSystemTransition()
+                !transition.isSystemTransition() || isCustomTargetStatus(toStatus)
         );
     }
 
     private WorkflowStatus resolveWorkflowStatus(WorkflowStatus statusRecord, TicketStatus fallbackStatus) {
-        if (isWorkflowStatusMetadataValid(statusRecord, fallbackStatus)) {
+        if (isWorkflowStatusMetadataValid(statusRecord, fallbackStatus)
+                || isCustomStatusMetadataValid(statusRecord, fallbackStatus)) {
             return statusRecord;
+        }
+        if (statusRecord != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow status metadata is invalid");
         }
 
         WorkflowStatus workflowStatus = workflowStatusRepository.findByStatusKey(fallbackStatus.name())
@@ -204,15 +217,22 @@ public class GenericTransitionExecutorService {
         if (currentStatus.behaviorBucket() == null || currentStatus.behaviorBucket() != transition.getFromStatus()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket effective status does not match transition source status");
         }
+        if (Boolean.FALSE.equals(currentStatus.actualStatusActive())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket workflow status is not active");
+        }
     }
 
-    private void validateTargetStatus(WorkflowStatus toStatus, TicketStatus targetStatus) {
-        if (!isWorkflowStatusMetadataValid(toStatus, targetStatus)) {
+    private TicketStatus resolveTargetStatusBehaviorBucket(WorkflowStatus toStatus, TicketStatus targetStatus) {
+        if (isWorkflowStatusMetadataValid(toStatus, targetStatus)) {
+            return targetStatus;
+        }
+
+        WorkflowStatusValidationHelper.CustomStatusExecutability executability =
+                WorkflowStatusValidationHelper.evaluateCustomStatusExecutability(toStatus, false);
+        if (!executability.executable() || executability.behaviorBucket() != targetStatus) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target workflow status is not supported for generic execution");
         }
-        if (!targetStatus.name().equals(toStatus.getStatusKey())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Custom workflow status assignment is not supported");
-        }
+        return executability.behaviorBucket();
     }
 
     private void validateAction(WorkflowAction action) {
@@ -233,7 +253,8 @@ public class GenericTransitionExecutorService {
             WorkflowTransition transition,
             WorkflowAction action,
             WorkflowStatus fromStatus,
-            WorkflowStatus toStatus
+            WorkflowStatus toStatus,
+            TicketStatus toStatusBehaviorBucket
     ) {
         if (transition.isProtectedTransition()
                 || action.isProtectedAction()
@@ -242,7 +263,7 @@ public class GenericTransitionExecutorService {
                 || toStatus.isTerminal()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transition requires dedicated workflow handling");
         }
-        if (requiresUnsupportedBusinessSideEffect(transition.getToStatus())) {
+        if (requiresUnsupportedBusinessSideEffect(toStatusBehaviorBucket)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transition requires unsupported business side effects");
         }
     }
@@ -257,12 +278,25 @@ public class GenericTransitionExecutorService {
         return WorkflowStatusValidationHelper.isSystemStatusMetadataValid(workflowStatus, expectedStatus);
     }
 
+    private boolean isCustomStatusMetadataValid(WorkflowStatus workflowStatus, TicketStatus expectedStatus) {
+        WorkflowStatusValidationHelper.CustomStatusExecutability executability =
+                WorkflowStatusValidationHelper.evaluateCustomStatusExecutability(workflowStatus, false);
+        return executability.executable() && executability.behaviorBucket() == expectedStatus;
+    }
+
+    private boolean isCustomTargetStatus(WorkflowStatus workflowStatus) {
+        return workflowStatus != null
+                && !workflowStatus.isSystemStatus()
+                && !workflowStatus.isProtectedStatus();
+    }
+
     public record GenericTransitionExecutionPlan(
             Ticket ticket,
             WorkflowTransition transition,
             WorkflowAction action,
             WorkflowStatus fromStatus,
             WorkflowStatus toStatus,
+            TicketStatus toStatusBehaviorBucket,
             ResolvedTicketStatus currentStatus,
             String executedByEmployeeId,
             boolean systemTransition,

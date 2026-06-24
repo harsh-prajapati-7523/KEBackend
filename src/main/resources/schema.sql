@@ -560,6 +560,64 @@ CREATE INDEX IF NOT EXISTS idx_workflow_transitions_from_status_id
 CREATE INDEX IF NOT EXISTS idx_workflow_transitions_to_status_id
     ON workflow_transitions(to_status_id);
 
+CREATE TABLE IF NOT EXISTS workflow_transition_role_rules (
+    id BIGSERIAL PRIMARY KEY,
+    workflow_transition_id BIGINT NOT NULL,
+    role_id BIGINT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    created_by_employee_id BIGINT,
+    updated_by_employee_id BIGINT,
+    CONSTRAINT fk_workflow_transition_role_rules_transition FOREIGN KEY (workflow_transition_id)
+        REFERENCES workflow_transitions(id),
+    CONSTRAINT fk_workflow_transition_role_rules_role FOREIGN KEY (role_id)
+        REFERENCES roles(id),
+    CONSTRAINT fk_workflow_transition_role_rules_created_by_employee FOREIGN KEY (created_by_employee_id)
+        REFERENCES employees(id),
+    CONSTRAINT fk_workflow_transition_role_rules_updated_by_employee FOREIGN KEY (updated_by_employee_id)
+        REFERENCES employees(id),
+    CONSTRAINT uk_workflow_transition_role_rules_transition_role UNIQUE (workflow_transition_id, role_id)
+);
+
+ALTER TABLE workflow_transition_role_rules
+    ALTER COLUMN active SET DEFAULT TRUE;
+
+ALTER TABLE workflow_transition_role_rules
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE workflow_transition_role_rules
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE workflow_transition_role_rules
+    ADD COLUMN IF NOT EXISTS created_by_employee_id BIGINT;
+
+ALTER TABLE workflow_transition_role_rules
+    ADD COLUMN IF NOT EXISTS updated_by_employee_id BIGINT;
+
+ALTER TABLE workflow_transition_role_rules
+    DROP CONSTRAINT IF EXISTS fk_workflow_transition_role_rules_created_by_employee;
+
+ALTER TABLE workflow_transition_role_rules
+    ADD CONSTRAINT fk_workflow_transition_role_rules_created_by_employee FOREIGN KEY (created_by_employee_id)
+    REFERENCES employees(id);
+
+ALTER TABLE workflow_transition_role_rules
+    DROP CONSTRAINT IF EXISTS fk_workflow_transition_role_rules_updated_by_employee;
+
+ALTER TABLE workflow_transition_role_rules
+    ADD CONSTRAINT fk_workflow_transition_role_rules_updated_by_employee FOREIGN KEY (updated_by_employee_id)
+    REFERENCES employees(id);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_transition_role_rules_transition_id
+    ON workflow_transition_role_rules(workflow_transition_id);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_transition_role_rules_role_id
+    ON workflow_transition_role_rules(role_id);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_transition_role_rules_active_match
+    ON workflow_transition_role_rules(workflow_transition_id, role_id, active);
+
 ALTER TABLE tickets
     ADD COLUMN IF NOT EXISTS status_id BIGINT;
 
@@ -633,6 +691,64 @@ SET
 CREATE INDEX IF NOT EXISTS idx_ticket_categories_active ON ticket_categories(active);
 
 CREATE INDEX IF NOT EXISTS idx_ticket_categories_sort_order ON ticket_categories(sort_order);
+
+CREATE TABLE IF NOT EXISTS workflow_transition_category_rules (
+    id BIGSERIAL PRIMARY KEY,
+    workflow_transition_id BIGINT NOT NULL,
+    category_id BIGINT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    created_by_employee_id BIGINT,
+    updated_by_employee_id BIGINT,
+    CONSTRAINT fk_workflow_transition_category_rules_transition FOREIGN KEY (workflow_transition_id)
+        REFERENCES workflow_transitions(id),
+    CONSTRAINT fk_workflow_transition_category_rules_category FOREIGN KEY (category_id)
+        REFERENCES ticket_categories(id),
+    CONSTRAINT fk_workflow_transition_category_rules_created_by_employee FOREIGN KEY (created_by_employee_id)
+        REFERENCES employees(id),
+    CONSTRAINT fk_workflow_transition_category_rules_updated_by_employee FOREIGN KEY (updated_by_employee_id)
+        REFERENCES employees(id),
+    CONSTRAINT uk_workflow_transition_category_rules_transition_category UNIQUE (workflow_transition_id, category_id)
+);
+
+ALTER TABLE workflow_transition_category_rules
+    ALTER COLUMN active SET DEFAULT TRUE;
+
+ALTER TABLE workflow_transition_category_rules
+    ALTER COLUMN created_at SET DEFAULT now();
+
+ALTER TABLE workflow_transition_category_rules
+    ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE workflow_transition_category_rules
+    ADD COLUMN IF NOT EXISTS created_by_employee_id BIGINT;
+
+ALTER TABLE workflow_transition_category_rules
+    ADD COLUMN IF NOT EXISTS updated_by_employee_id BIGINT;
+
+ALTER TABLE workflow_transition_category_rules
+    DROP CONSTRAINT IF EXISTS fk_workflow_transition_category_rules_created_by_employee;
+
+ALTER TABLE workflow_transition_category_rules
+    ADD CONSTRAINT fk_workflow_transition_category_rules_created_by_employee FOREIGN KEY (created_by_employee_id)
+    REFERENCES employees(id);
+
+ALTER TABLE workflow_transition_category_rules
+    DROP CONSTRAINT IF EXISTS fk_workflow_transition_category_rules_updated_by_employee;
+
+ALTER TABLE workflow_transition_category_rules
+    ADD CONSTRAINT fk_workflow_transition_category_rules_updated_by_employee FOREIGN KEY (updated_by_employee_id)
+    REFERENCES employees(id);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_transition_category_rules_transition_id
+    ON workflow_transition_category_rules(workflow_transition_id);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_transition_category_rules_category_id
+    ON workflow_transition_category_rules(category_id);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_transition_category_rules_active_match
+    ON workflow_transition_category_rules(workflow_transition_id, category_id, active);
 
 CREATE TABLE IF NOT EXISTS dropdown_sources (
     id BIGSERIAL PRIMARY KEY,
