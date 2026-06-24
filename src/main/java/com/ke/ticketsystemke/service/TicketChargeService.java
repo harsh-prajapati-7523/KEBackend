@@ -18,7 +18,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -113,6 +117,23 @@ public class TicketChargeService {
     BigDecimal calculateTotalCharge(Ticket ticket) {
         BigDecimal total = chargeRepository.sumAmountByTicket(ticket);
         return total != null ? total.setScale(2, RoundingMode.UNNECESSARY) : BigDecimal.ZERO.setScale(2);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, BigDecimal> calculateTotalChargesByTicketIds(Collection<Long> ticketIds) {
+        if (ticketIds == null || ticketIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<Long, BigDecimal> totalsByTicketId = new HashMap<>();
+        for (TicketChargeItemRepository.TicketChargeTotalProjection total : chargeRepository.sumAmountByTicketIds(ticketIds)) {
+            BigDecimal amount = total.getTotalAmount();
+            totalsByTicketId.put(
+                    total.getTicketId(),
+                    amount != null ? amount.setScale(2, RoundingMode.UNNECESSARY) : BigDecimal.ZERO.setScale(2)
+            );
+        }
+        return totalsByTicketId;
     }
 
     private ChargeListResponse buildChargeListResponse(Ticket ticket) {

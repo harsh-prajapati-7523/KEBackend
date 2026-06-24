@@ -1,6 +1,7 @@
 package com.ke.ticketsystemke.repository;
 
 import com.ke.ticketsystemke.entity.Ticket;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +17,8 @@ public interface TicketRepository
 
     List<Ticket> findAllByOrderByCreatedAtDesc();
 
+    List<Ticket> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
     List<Ticket> findTop10ByMobileNumberAndIdNotOrderByCreatedAtDesc(String mobileNumber, Long id);
 
     @Query(value = """
@@ -27,8 +30,13 @@ public interface TicketRepository
                OR LOWER(product_type) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
                OR LOWER(village_or_area) LIKE '%' || LOWER(:query) || '%' ESCAPE '\\'
             ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
             """, nativeQuery = true)
-    List<Ticket> searchTickets(@Param("query") String query);
+    List<Ticket> searchTickets(
+            @Param("query") String query,
+            @Param("limit") int limit,
+            @Param("offset") int offset
+    );
 
     @Query(value = """
             SELECT MIN(BTRIM(product_type))

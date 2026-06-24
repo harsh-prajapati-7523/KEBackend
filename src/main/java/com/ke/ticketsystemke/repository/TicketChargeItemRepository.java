@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,6 +19,15 @@ public interface TicketChargeItemRepository extends JpaRepository<TicketChargeIt
 
     @Query("SELECT COALESCE(SUM(item.amount), 0) FROM TicketChargeItem item WHERE item.ticket = :ticket AND item.deletedAt IS NULL")
     BigDecimal sumAmountByTicket(@Param("ticket") Ticket ticket);
+
+    @Query("""
+            SELECT item.ticket.id AS ticketId, COALESCE(SUM(item.amount), 0) AS totalAmount
+            FROM TicketChargeItem item
+            WHERE item.ticket.id IN :ticketIds
+              AND item.deletedAt IS NULL
+            GROUP BY item.ticket.id
+            """)
+    List<TicketChargeTotalProjection> sumAmountByTicketIds(@Param("ticketIds") Collection<Long> ticketIds);
 
     @Query(value = """
             SELECT MIN(BTRIM(description))
@@ -31,4 +41,11 @@ public interface TicketChargeItemRepository extends JpaRepository<TicketChargeIt
             LIMIT 5
             """, nativeQuery = true)
     List<String> findDescriptionSuggestions(@Param("query") String query);
+
+    interface TicketChargeTotalProjection {
+
+        Long getTicketId();
+
+        BigDecimal getTotalAmount();
+    }
 }

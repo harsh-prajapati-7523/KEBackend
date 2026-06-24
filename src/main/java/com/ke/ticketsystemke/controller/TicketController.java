@@ -79,13 +79,28 @@ public class TicketController {
     }
 
     @GetMapping
-    public List<TicketResponse> listTickets(Authentication authentication) {
+    public List<TicketResponse> listTickets(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication
+    ) {
         String employeeId = authentication.getName();
         accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
-        log.info("event=ticket_list_requested employeeId={}", employeeId);
-        List<TicketResponse> list = service.listTickets();
+        log.info("event=ticket_list_requested employeeId={} page={} size={}", employeeId, page, size);
+        List<TicketResponse> list = service.listTickets(page, size);
         log.info("event=ticket_list_returned count={}", list.size());
         return list;
+    }
+
+    @GetMapping("/{id}")
+    public TicketResponse getTicket(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
+        log.info("event=ticket_detail_requested employeeId={} ticketId={}", employeeId, id);
+        return service.getTicket(id);
     }
 
     @GetMapping("/status-filter-options")
@@ -183,15 +198,18 @@ public class TicketController {
     @GetMapping("/search")
     public List<TicketResponse> searchTickets(
             @RequestParam(required = false) String query,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
         accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
         accessService.requireAllowed(employeeId, AccessKey.USE_TICKET_SEARCH);
         int queryLength = query == null ? 0 : query.length();
-        log.info("event=ticket_search_requested employeeId={} queryLength={}", employeeId, queryLength);
+        log.info("event=ticket_search_requested employeeId={} queryLength={} page={} size={}",
+                employeeId, queryLength, page, size);
 
-        List<TicketResponse> list = service.searchTickets(query);
+        List<TicketResponse> list = service.searchTickets(query, page, size);
 
         log.info("event=ticket_search_returned employeeId={} queryLength={} resultCount={}",
                 employeeId, queryLength, list.size());
@@ -206,6 +224,8 @@ public class TicketController {
             @RequestParam(required = false) String createdFrom,
             @RequestParam(required = false) String createdTo,
             @RequestParam(required = false) String mine,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             Authentication authentication
     ) {
         String employeeId = authentication.getName();
@@ -221,8 +241,8 @@ public class TicketController {
                 createdFrom,
                 createdTo
         );
-        log.info("event=ticket_query_requested employeeId={} activeFilterCount={} hasSearch={} mine={}",
-                employeeId, activeFilterCount, hasSearch, mineRequested);
+        log.info("event=ticket_query_requested employeeId={} activeFilterCount={} hasSearch={} mine={} page={} size={}",
+                employeeId, activeFilterCount, hasSearch, mineRequested, page, size);
 
         List<TicketResponse> list = service.queryTickets(
                 search,
@@ -231,7 +251,9 @@ public class TicketController {
                 createdFrom,
                 createdTo,
                 mine,
-                employeeId
+                employeeId,
+                page,
+                size
         );
 
         log.info("event=ticket_query_returned employeeId={} activeFilterCount={} hasSearch={} mine={} resultCount={}",

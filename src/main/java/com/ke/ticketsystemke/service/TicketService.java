@@ -36,6 +36,7 @@ import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.TicketSpecifications;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
 import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -68,6 +69,8 @@ public class TicketService {
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
     private static final int DYNAMIC_TEXT_MAX_LENGTH = 255;
     private static final int DYNAMIC_TEXTAREA_MAX_LENGTH = 1000;
+    private static final int DEFAULT_TICKET_READ_SIZE = 100;
+    private static final int MAX_TICKET_READ_SIZE = 100;
     private static final String ROLE_ACCESS_DENIED = "ROLE_ACCESS_DENIED";
     private static final String WORKFLOW_TRANSITION_INACTIVE = "WORKFLOW_TRANSITION_INACTIVE";
     private static final String STATUS_NOT_ALLOWED = "STATUS_NOT_ALLOWED";
@@ -647,12 +650,26 @@ public class TicketService {
 
     @Transactional(readOnly = true)
     public List<TicketResponse> listTickets() {
-        List<TicketResponse> list = repository.findAllByOrderByCreatedAtDesc()
-            .stream()
-            .map(ticket -> toTicketResponse(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
-            .toList();
+        return listTickets(null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TicketResponse> listTickets(Integer page, Integer size) {
+        PageRequest pageRequest = ticketReadPageRequest(page, size);
+        List<Ticket> tickets = repository.findAllByOrderByCreatedAtDesc(pageRequest);
+        List<TicketResponse> list = toTicketResponses(tickets);
         log.info("event=ticket_list_returned count={}", list.size());
         return list;
+    }
+
+    @Transactional(readOnly = true)
+    public TicketResponse getTicket(Long ticketId) {
+        Ticket ticket = repository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"
+                ));
+        return toTicketResponse(ticket, ticketChargeService.calculateTotalCharge(ticket));
     }
 
     @Transactional(readOnly = true)
@@ -693,12 +710,17 @@ public class TicketService {
                         "Ticket not found"
                 ));
 
-        List<CustomerHistoryTicketResponse> tickets = repository
-                .findTop10ByMobileNumberAndIdNotOrderByCreatedAtDesc(ticket.getMobileNumber(), ticketId)
-                .stream()
+        List<Ticket> historyTickets = repository
+                .findTop10ByMobileNumberAndIdNotOrderByCreatedAtDesc(ticket.getMobileNumber(), ticketId);
+        Map<Long, BigDecimal> totalsByTicketId = ticketChargeService.calculateTotalChargesByTicketIds(
+                historyTickets.stream()
+                        .map(Ticket::getId)
+                        .toList()
+        );
+        List<CustomerHistoryTicketResponse> tickets = historyTickets.stream()
                 .map(historyTicket -> CustomerHistoryTicketResponse.from(
                         historyTicket,
-                        ticketChargeService.calculateTotalCharge(historyTicket.getId())
+                        totalsByTicketId.getOrDefault(historyTicket.getId(), BigDecimal.ZERO.setScale(2))
                 ))
                 .toList();
 
@@ -726,15 +748,23 @@ public class TicketService {
 
     @Transactional(readOnly = true)
     public List<TicketResponse> searchTickets(String query) {
+        return searchTickets(query, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TicketResponse> searchTickets(String query, Integer page, Integer size) {
         String normalizedQuery = normalizeSearchQuery(query);
         if (normalizedQuery == null) {
             return Collections.emptyList();
         }
 
-        return repository.searchTickets(escapeLikeWildcards(normalizedQuery))
-                .stream()
-                .map(ticket -> toTicketResponse(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
-                .toList();
+        PageRequest pageRequest = ticketReadPageRequest(page, size);
+        List<Ticket> tickets = repository.searchTickets(
+                escapeLikeWildcards(normalizedQuery),
+                pageRequest.getPageSize(),
+                offset(pageRequest)
+        );
+        return toTicketResponses(tickets);
     }
 
     @Transactional(readOnly = true)
@@ -746,6 +776,21 @@ public class TicketService {
             String createdTo,
             String mine,
             String employeeId
+    ) {
+        return queryTickets(search, status, category, createdFrom, createdTo, mine, employeeId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TicketResponse> queryTickets(
+            String search,
+            String status,
+            String category,
+            String createdFrom,
+            String createdTo,
+            String mine,
+            String employeeId,
+            Integer page,
+            Integer size
     ) {
         String normalizedSearch = normalizeSearchQuery(search);
         TicketStatus parsedStatus = parseEnum(TicketStatus.class, status, "status");
@@ -760,8 +805,9 @@ public class TicketService {
 
         Instant createdFromInclusive = atStartOfBusinessDay(parsedCreatedFrom);
         Instant createdToExclusive = parsedCreatedTo == null ? null : atStartOfBusinessDay(nextDay(parsedCreatedTo));
+        PageRequest pageRequest = ticketReadPageRequest(page, size);
 
-        return repository.findAll(
+        List<Ticket> tickets = repository.findAll(
                         TicketSpecifications.queryTickets(
                                 normalizedSearch == null ? null : escapeLikeWildcards(normalizedSearch),
                                 parsedStatus,
@@ -770,15 +816,52 @@ public class TicketService {
                                 createdToExclusive,
                                 parsedMine ? employeeId : null
                         ),
-                        Sort.by(Sort.Direction.DESC, "createdAt")
+                        pageRequest
                 )
-                .stream()
-                .map(ticket -> toTicketResponse(ticket, ticketChargeService.calculateTotalCharge(ticket.getId())))
-                .toList();
+                .getContent();
+        return toTicketResponses(tickets);
     }
 
     private TicketResponse toTicketResponse(Ticket ticket, BigDecimal totalCharge) {
         return TicketResponse.from(ticket, totalCharge, effectiveStatusResolver.resolve(ticket));
+    }
+
+    private List<TicketResponse> toTicketResponses(List<Ticket> tickets) {
+        Map<Long, BigDecimal> totalsByTicketId = ticketChargeService.calculateTotalChargesByTicketIds(
+                tickets.stream()
+                        .map(Ticket::getId)
+                        .toList()
+        );
+        return tickets.stream()
+                .map(ticket -> toTicketResponse(ticket, totalsByTicketId.getOrDefault(ticket.getId(), BigDecimal.ZERO.setScale(2))))
+                .toList();
+    }
+
+    private PageRequest ticketReadPageRequest(Integer page, Integer size) {
+        return PageRequest.of(
+                normalizePage(page),
+                normalizeTicketReadSize(size),
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+    }
+
+    private int normalizePage(Integer page) {
+        if (page == null || page < 0) {
+            return 0;
+        }
+        return page;
+    }
+
+    private int normalizeTicketReadSize(Integer size) {
+        if (size == null || size <= 0) {
+            return DEFAULT_TICKET_READ_SIZE;
+        }
+        return Math.min(size, MAX_TICKET_READ_SIZE);
+    }
+
+    private int offset(PageRequest pageRequest) {
+        long offset = pageRequest.getOffset();
+        return offset > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) offset;
     }
 
     private List<DynamicValueDraft> validateDynamicValues(
