@@ -3,9 +3,12 @@ package com.ke.ticketsystemke.service;
 import com.ke.ticketsystemke.dto.AccessKeyMetadataResponse;
 import com.ke.ticketsystemke.dto.CreateAccessKeyMetadataRequest;
 import com.ke.ticketsystemke.dto.UpdateAccessKeyMetadataRequest;
+import com.ke.ticketsystemke.config.CacheNames;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.AccessKeyMetadata;
 import com.ke.ticketsystemke.repository.AccessKeyMetadataRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.slf4j.Logger;
@@ -33,6 +36,7 @@ public class AccessKeyMetadataService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.ACCESS_KEY_METADATA, key = "'all'")
     public List<AccessKeyMetadataResponse> listAccessKeys(String employeeId) {
         List<AccessKeyMetadataResponse> keys = accessKeyMetadataRepository.findAllByOrderBySortOrderAscAccessKeyAsc()
                 .stream()
@@ -43,6 +47,7 @@ public class AccessKeyMetadataService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheNames.ACCESS_KEY_METADATA, allEntries = true)
     public AccessKeyMetadataResponse createAccessKey(CreateAccessKeyMetadataRequest request, String employeeId) {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Access key metadata request is required");
@@ -76,6 +81,7 @@ public class AccessKeyMetadataService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheNames.ACCESS_KEY_METADATA, allEntries = true)
     public AccessKeyMetadataResponse updateAccessKey(Long id, UpdateAccessKeyMetadataRequest request, String employeeId) {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Access key metadata request is required");
@@ -96,6 +102,7 @@ public class AccessKeyMetadataService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheNames.ACCESS_KEY_METADATA, allEntries = true)
     public AccessKeyMetadataResponse updateAccessKeyState(Long id, Boolean active, String employeeId) {
         if (active == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active state is required");

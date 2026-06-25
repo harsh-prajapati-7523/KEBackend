@@ -2,8 +2,11 @@ package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.CreateTicketCategoryRequest;
 import com.ke.ticketsystemke.dto.TicketCategoryResponse;
+import com.ke.ticketsystemke.config.CacheNames;
 import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -27,6 +30,7 @@ public class TicketCategoryService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.TICKET_CATEGORIES, key = "'all'")
     public List<TicketCategoryResponse> listCategories() {
         return ticketCategoryRepository.findAllByOrderBySortOrderAscCategoryKeyAsc()
                 .stream()
@@ -35,6 +39,7 @@ public class TicketCategoryService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheNames.TICKET_CATEGORIES, allEntries = true)
     public TicketCategoryResponse createCategory(CreateTicketCategoryRequest request, String actorEmployeeId) {
         String categoryKey = request.getCategoryKey().trim();
         if (ticketCategoryRepository.existsByCategoryKey(categoryKey)) {
@@ -63,6 +68,7 @@ public class TicketCategoryService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheNames.TICKET_CATEGORIES, allEntries = true)
     public TicketCategoryResponse updateStatus(Long id, boolean active, String actorEmployeeId) {
         TicketCategoryConfig category = ticketCategoryRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));

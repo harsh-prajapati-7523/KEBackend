@@ -4,11 +4,14 @@ import com.ke.ticketsystemke.dto.CreateWorkflowStatusRequest;
 import com.ke.ticketsystemke.dto.UpdateWorkflowStatusRequest;
 import com.ke.ticketsystemke.dto.UpdateWorkflowStatusStateRequest;
 import com.ke.ticketsystemke.dto.WorkflowStatusResponse;
+import com.ke.ticketsystemke.config.CacheNames;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -44,6 +47,7 @@ public class WorkflowStatusService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.WORKFLOW_STATUSES, key = "'all'")
     public List<WorkflowStatusResponse> listStatuses(String employeeId) {
         List<WorkflowStatusResponse> statuses = workflowStatusRepository.findAllByOrderBySortOrderAscIdAsc()
                 .stream()
@@ -54,6 +58,11 @@ public class WorkflowStatusService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_STATUSES,
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
     public WorkflowStatusResponse createStatus(CreateWorkflowStatusRequest request, String employeeId) {
         String statusKey = validateNewStatusKey(request.getStatusKey());
         String displayName = validateDisplayName(request.getDisplayName());
@@ -87,6 +96,11 @@ public class WorkflowStatusService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_STATUSES,
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
     public WorkflowStatusResponse updateStatus(Long id, UpdateWorkflowStatusRequest request, String employeeId) {
         WorkflowStatus status = findStatus(id);
         requireCustomEditable(status, employeeId, "edit");
@@ -106,6 +120,11 @@ public class WorkflowStatusService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_STATUSES,
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
     public WorkflowStatusResponse updateStatusState(Long id, UpdateWorkflowStatusStateRequest request, String employeeId) {
         WorkflowStatus status = findStatus(id);
         requireCustomEditable(status, employeeId, "status_update");

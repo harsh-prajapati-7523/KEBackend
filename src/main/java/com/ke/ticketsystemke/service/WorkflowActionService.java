@@ -1,7 +1,9 @@
 package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.WorkflowActionResponse;
+import com.ke.ticketsystemke.config.CacheNames;
 import com.ke.ticketsystemke.repository.WorkflowActionRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ public class WorkflowActionService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.WORKFLOW_ACTIONS, key = "'all'")
     public List<WorkflowActionResponse> listActions(String employeeId) {
         List<WorkflowActionResponse> actions = workflowActionRepository.findAllByOrderBySortOrderAscActionKeyAsc()
                 .stream()

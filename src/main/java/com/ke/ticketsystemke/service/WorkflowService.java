@@ -5,6 +5,7 @@ import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionRequest;
 import com.ke.ticketsystemke.dto.WorkflowTransitionOptionResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionOptionsResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionResponse;
+import com.ke.ticketsystemke.config.CacheNames;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.TicketStatus;
@@ -13,6 +14,8 @@ import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -86,6 +89,7 @@ public class WorkflowService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.WORKFLOW_TRANSITIONS, key = "'all'")
     public List<WorkflowTransitionResponse> listTransitions() {
         return workflowTransitionRepository.findAllByOrderBySortOrderAscIdAsc()
                 .stream()
@@ -94,6 +98,7 @@ public class WorkflowService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.WORKFLOW_TRANSITION_OPTIONS, key = "'safeOptions'")
     public WorkflowTransitionOptionsResponse getTransitionOptions(String employeeId) {
         Map<TransitionKey, WorkflowTransition> transitionsByKey = new HashMap<>();
         for (WorkflowTransition transition : workflowTransitionRepository.findAll()) {
@@ -113,6 +118,10 @@ public class WorkflowService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
     public WorkflowTransitionResponse createTransition(
             CreateWorkflowTransitionRequest request,
             String employeeId
@@ -178,6 +187,10 @@ public class WorkflowService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
     public WorkflowTransitionResponse updateTransition(
             Long id,
             UpdateWorkflowTransitionRequest request,

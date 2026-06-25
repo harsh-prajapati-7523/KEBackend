@@ -4,11 +4,14 @@ import com.ke.ticketsystemke.dto.CreateDropdownOptionRequest;
 import com.ke.ticketsystemke.dto.CreateDropdownSourceRequest;
 import com.ke.ticketsystemke.dto.DropdownOptionResponse;
 import com.ke.ticketsystemke.dto.DropdownSourceResponse;
+import com.ke.ticketsystemke.config.CacheNames;
 import com.ke.ticketsystemke.entity.DropdownOption;
 import com.ke.ticketsystemke.entity.DropdownSource;
 import com.ke.ticketsystemke.entity.DropdownSourceType;
 import com.ke.ticketsystemke.repository.DropdownOptionRepository;
 import com.ke.ticketsystemke.repository.DropdownSourceRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -36,6 +39,7 @@ public class DropdownSourceService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.DROPDOWN_SOURCES, key = "'all'")
     public List<DropdownSourceResponse> listSources() {
         return dropdownSourceRepository.findAllByOrderByDisplayNameAscSourceKeyAscIdAsc()
                 .stream()
@@ -44,6 +48,7 @@ public class DropdownSourceService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheNames.DROPDOWN_SOURCES, allEntries = true)
     public DropdownSourceResponse createSource(CreateDropdownSourceRequest request, String actorEmployeeId) {
         if (request.getSourceType() != null && request.getSourceType() != DropdownSourceType.MANUAL) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only MANUAL dropdown sources are supported");
@@ -76,6 +81,7 @@ public class DropdownSourceService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheNames.DROPDOWN_SOURCES, allEntries = true)
     public DropdownSourceResponse updateSourceStatus(Long sourceId, boolean active, String actorEmployeeId) {
         DropdownSource source = findSource(sourceId);
         source.setActive(active);
@@ -87,6 +93,7 @@ public class DropdownSourceService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.DROPDOWN_OPTIONS, key = "#sourceId")
     public List<DropdownOptionResponse> listOptions(Long sourceId) {
         validateSourceExists(sourceId);
         return dropdownOptionRepository.findAllBySourceIdOrderBySortOrderAscDisplayValueAscIdAsc(sourceId)
@@ -96,6 +103,7 @@ public class DropdownSourceService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheNames.DROPDOWN_OPTIONS, key = "#sourceId")
     public DropdownOptionResponse createOption(Long sourceId, CreateDropdownOptionRequest request, String actorEmployeeId) {
         DropdownSource source = findSource(sourceId);
         String optionKey = request.getOptionKey().trim();
@@ -125,6 +133,7 @@ public class DropdownSourceService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheNames.DROPDOWN_OPTIONS, key = "#sourceId")
     public DropdownOptionResponse updateOptionStatus(Long sourceId, Long optionId, boolean active, String actorEmployeeId) {
         validateSourceExists(sourceId);
         DropdownOption option = dropdownOptionRepository.findByIdAndSourceId(optionId, sourceId)
