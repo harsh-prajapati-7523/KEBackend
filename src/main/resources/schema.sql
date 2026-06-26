@@ -554,6 +554,16 @@ ALTER TABLE workflow_transitions
     ADD CONSTRAINT fk_workflow_transitions_to_status FOREIGN KEY (to_status_id)
     REFERENCES workflow_statuses(id);
 
+ALTER TABLE workflow_transitions
+    DROP CONSTRAINT IF EXISTS uk_workflow_transitions_action_from_to;
+
+ALTER TABLE workflow_transitions
+    DROP CONSTRAINT IF EXISTS uk_workflow_transitions_action_from_to_status_id;
+
+ALTER TABLE workflow_transitions
+    ADD CONSTRAINT uk_workflow_transitions_action_from_to_status_id
+    UNIQUE (action_key, from_status_id, to_status_id);
+
 CREATE INDEX IF NOT EXISTS idx_workflow_transitions_from_status_id
     ON workflow_transitions(from_status_id);
 

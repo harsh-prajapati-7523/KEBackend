@@ -436,8 +436,9 @@ public class TicketService {
         }
 
         List<TicketDynamicActionResponse> dynamicActions = new ArrayList<>();
-        List<WorkflowTransition> candidates = workflowTransitionRepository
-                .findByFromStatusAndActiveTrueOrderBySortOrderAscIdAsc(ticket.getStatus());
+        List<WorkflowTransition> candidates = ticket.getStatusRecord() != null && ticket.getStatusRecord().getId() != null
+                ? workflowTransitionRepository.findByFromStatusRecord_IdAndActiveTrueOrderBySortOrderAscIdAsc(ticket.getStatusRecord().getId())
+                : workflowTransitionRepository.findByFromStatusAndActiveTrueOrderBySortOrderAscIdAsc(ticket.getStatus());
         for (WorkflowTransition candidate : candidates) {
             if (isProtectedFixedAction(candidate.getActionKey())) {
                 continue;

@@ -64,6 +64,9 @@ public class WorkflowStatusService {
             CacheNames.WORKFLOW_TRANSITION_OPTIONS
     }, allEntries = true)
     public WorkflowStatusResponse createStatus(CreateWorkflowStatusRequest request, String employeeId) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow status request is required");
+        }
         String statusKey = validateNewStatusKey(request.getStatusKey());
         String displayName = validateDisplayName(request.getDisplayName());
 
@@ -79,7 +82,8 @@ public class WorkflowStatusService {
         status.setActive(request.getActive() == null || request.getActive());
         status.setSystemStatus(false);
         status.setProtectedStatus(false);
-        status.setTerminal(false);
+        status.setTerminal(Boolean.TRUE.equals(request.getTerminal()));
+        status.setBehaviorBucket(validateCustomStatusBehaviorBucket(request.getBehaviorBucket(), status.isTerminal()));
         status.setSortOrder(request.getSortOrder());
         status.setUpdatedByEmployee(resolveEmployee(employeeId));
 
@@ -102,11 +106,22 @@ public class WorkflowStatusService {
             CacheNames.WORKFLOW_TRANSITION_OPTIONS
     }, allEntries = true)
     public WorkflowStatusResponse updateStatus(Long id, UpdateWorkflowStatusRequest request, String employeeId) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow status request is required");
+        }
         WorkflowStatus status = findStatus(id);
         requireCustomEditable(status, employeeId, "edit");
 
         if (request.getDisplayName() != null) {
             status.setDisplayName(validateDisplayName(request.getDisplayName()));
+        }
+        if (request.getTerminal() != null) {
+            status.setTerminal(request.getTerminal());
+        }
+        if (request.getBehaviorBucket() != null) {
+            status.setBehaviorBucket(validateCustomStatusBehaviorBucket(request.getBehaviorBucket(), status.isTerminal()));
+        } else if (request.getTerminal() != null) {
+            status.setBehaviorBucket(validateCustomStatusBehaviorBucket(status.getBehaviorBucket(), status.isTerminal()));
         }
         if (request.getSortOrder() != null) {
             status.setSortOrder(request.getSortOrder());
@@ -126,6 +141,9 @@ public class WorkflowStatusService {
             CacheNames.WORKFLOW_TRANSITION_OPTIONS
     }, allEntries = true)
     public WorkflowStatusResponse updateStatusState(Long id, UpdateWorkflowStatusStateRequest request, String employeeId) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow status state request is required");
+        }
         WorkflowStatus status = findStatus(id);
         requireCustomEditable(status, employeeId, "status_update");
 
@@ -171,11 +189,29 @@ public class WorkflowStatusService {
                     employeeId, status.getId(), status.getStatusKey(), action);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "System and protected workflow statuses are read-only");
         }
-        if (status.isTerminal()) {
-            log.warn("event=workflow_status_update_rejected employeeId={} statusId={} statusKey={} action={} result=terminal",
-                    employeeId, status.getId(), status.getStatusKey(), action);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terminal workflow statuses are read-only");
+    }
+
+    private TicketStatus validateCustomStatusBehaviorBucket(TicketStatus behaviorBucket, boolean terminal) {
+        if (behaviorBucket == null) {
+            if (terminal) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terminal custom statuses require a behavior bucket");
+            }
+            return null;
         }
+
+        if (terminal && behaviorBucket != TicketStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terminal custom statuses must use COMPLETED behavior bucket");
+        }
+
+        if (!terminal && (behaviorBucket == TicketStatus.COMPLETED || behaviorBucket == TicketStatus.CANCELLED)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Non-terminal custom statuses cannot use terminal behavior buckets");
+        }
+
+        if (behaviorBucket == TicketStatus.PICKED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Custom statuses cannot use PICKED behavior bucket");
+        }
+
+        return behaviorBucket;
     }
 
     private Employee resolveEmployee(String employeeId) {

@@ -1,5 +1,6 @@
 package com.ke.ticketsystemke.dto;
 
+import com.ke.ticketsystemke.entity.TicketStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -14,6 +15,10 @@ public class CreateWorkflowStatusRequest {
     private String displayName;
 
     private Boolean active;
+
+    private Boolean terminal;
+
+    private TicketStatus behaviorBucket;
 
     private Integer sortOrder;
 
@@ -39,6 +44,22 @@ public class CreateWorkflowStatusRequest {
 
     public void setActive(Boolean active) {
         this.active = active;
+    }
+
+    public Boolean getTerminal() {
+        return terminal;
+    }
+
+    public void setTerminal(Boolean terminal) {
+        this.terminal = terminal;
+    }
+
+    public TicketStatus getBehaviorBucket() {
+        return behaviorBucket;
+    }
+
+    public void setBehaviorBucket(TicketStatus behaviorBucket) {
+        this.behaviorBucket = behaviorBucket;
     }
 
     public Integer getSortOrder() {

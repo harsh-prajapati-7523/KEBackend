@@ -14,10 +14,18 @@ public interface WorkflowTransitionRepository extends JpaRepository<WorkflowTran
 
     List<WorkflowTransition> findByFromStatusAndActiveTrueOrderBySortOrderAscIdAsc(TicketStatus fromStatus);
 
+    List<WorkflowTransition> findByFromStatusRecord_IdAndActiveTrueOrderBySortOrderAscIdAsc(Long fromStatusId);
+
     Optional<WorkflowTransition> findByActionKeyAndFromStatusAndToStatus(
             String actionKey,
             TicketStatus fromStatus,
             TicketStatus toStatus
+    );
+
+    Optional<WorkflowTransition> findByActionKeyAndFromStatusRecord_IdAndToStatusRecord_Id(
+            String actionKey,
+            Long fromStatusId,
+            Long toStatusId
     );
 
     default Optional<WorkflowTransition> findByActionKeyAndFromStatusAndToStatus(

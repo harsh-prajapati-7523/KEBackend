@@ -22,8 +22,8 @@ import java.util.Locale;
 @Table(
         name = "workflow_transitions",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_workflow_transitions_action_from_to",
-                columnNames = {"action_key", "from_status", "to_status"}
+                name = "uk_workflow_transitions_action_from_to_status_id",
+                columnNames = {"action_key", "from_status_id", "to_status_id"}
         )
 )
 public class WorkflowTransition {

@@ -220,6 +220,11 @@ public class GenericTransitionExecutorService {
         if (Boolean.FALSE.equals(currentStatus.actualStatusActive())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket workflow status is not active");
         }
+        if (transition.getFromStatusRecord() != null
+                && transition.getFromStatusRecord().getId() != null
+                && !transition.getFromStatusRecord().getId().equals(currentStatus.actualStatusId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket exact workflow status does not match transition source status");
+        }
     }
 
     private TicketStatus resolveTargetStatusBehaviorBucket(WorkflowStatus toStatus, TicketStatus targetStatus) {
@@ -228,7 +233,7 @@ public class GenericTransitionExecutorService {
         }
 
         WorkflowStatusValidationHelper.CustomStatusExecutability executability =
-                WorkflowStatusValidationHelper.evaluateCustomStatusExecutability(toStatus, false);
+                WorkflowStatusValidationHelper.evaluateCustomStatusExecutability(toStatus, isAllowedCustomTerminalTarget(toStatus));
         if (!executability.executable() || executability.behaviorBucket() != targetStatus) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target workflow status is not supported for generic execution");
         }
@@ -256,21 +261,22 @@ public class GenericTransitionExecutorService {
             WorkflowStatus toStatus,
             TicketStatus toStatusBehaviorBucket
     ) {
+        boolean customTerminalTarget = isAllowedCustomTerminalTarget(toStatus);
         if (transition.isProtectedTransition()
                 || action.isProtectedAction()
                 || PROTECTED_FIXED_ACTION_KEYS.contains(action.getActionKey())
                 || fromStatus.isTerminal()
-                || toStatus.isTerminal()) {
+                || (toStatus.isTerminal() && !customTerminalTarget)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transition requires dedicated workflow handling");
         }
-        if (requiresUnsupportedBusinessSideEffect(toStatusBehaviorBucket)) {
+        if (requiresUnsupportedBusinessSideEffect(toStatusBehaviorBucket, customTerminalTarget)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transition requires unsupported business side effects");
         }
     }
 
-    private boolean requiresUnsupportedBusinessSideEffect(TicketStatus toStatus) {
+    private boolean requiresUnsupportedBusinessSideEffect(TicketStatus toStatus, boolean customTerminalTarget) {
         return toStatus == TicketStatus.PICKED
-                || toStatus == TicketStatus.COMPLETED
+                || (toStatus == TicketStatus.COMPLETED && !customTerminalTarget)
                 || toStatus == TicketStatus.CANCELLED;
     }
 
@@ -288,6 +294,13 @@ public class GenericTransitionExecutorService {
         return workflowStatus != null
                 && !workflowStatus.isSystemStatus()
                 && !workflowStatus.isProtectedStatus();
+    }
+
+    private boolean isAllowedCustomTerminalTarget(WorkflowStatus workflowStatus) {
+        return isCustomTargetStatus(workflowStatus)
+                && workflowStatus.isTerminal()
+                && workflowStatus.isActive()
+                && workflowStatus.getBehaviorBucket() == TicketStatus.COMPLETED;
     }
 
     public record GenericTransitionExecutionPlan(

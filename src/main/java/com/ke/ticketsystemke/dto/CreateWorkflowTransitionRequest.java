@@ -1,35 +1,34 @@
 package com.ke.ticketsystemke.dto;
 
-import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public class CreateWorkflowTransitionRequest {
 
-    @NotNull
-    private AccessKey actionKey;
+    private String actionKey;
 
     @NotBlank
     @Size(max = 80)
     private String displayName;
 
-    @NotNull
     private TicketStatus fromStatus;
 
-    @NotNull
     private TicketStatus toStatus;
+
+    private Long fromStatusId;
+
+    private Long toStatusId;
 
     private Boolean active;
 
     private Integer sortOrder;
 
-    public AccessKey getActionKey() {
+    public String getActionKey() {
         return actionKey;
     }
 
-    public void setActionKey(AccessKey actionKey) {
+    public void setActionKey(String actionKey) {
         this.actionKey = actionKey;
     }
 
@@ -55,6 +54,22 @@ public class CreateWorkflowTransitionRequest {
 
     public void setToStatus(TicketStatus toStatus) {
         this.toStatus = toStatus;
+    }
+
+    public Long getFromStatusId() {
+        return fromStatusId;
+    }
+
+    public void setFromStatusId(Long fromStatusId) {
+        this.fromStatusId = fromStatusId;
+    }
+
+    public Long getToStatusId() {
+        return toStatusId;
+    }
+
+    public void setToStatusId(Long toStatusId) {
+        this.toStatusId = toStatusId;
     }
 
     public Boolean getActive() {

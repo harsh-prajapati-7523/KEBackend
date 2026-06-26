@@ -12,6 +12,7 @@ import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WorkflowTransition;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
+import com.ke.ticketsystemke.repository.WorkflowActionRepository;
 import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
 import org.springframework.cache.annotation.CacheEvict;
@@ -52,15 +53,18 @@ public class WorkflowService {
     private final WorkflowTransitionRepository workflowTransitionRepository;
     private final EmployeeRepository employeeRepository;
     private final WorkflowStatusRepository workflowStatusRepository;
+    private final WorkflowActionRepository workflowActionRepository;
 
     public WorkflowService(
             WorkflowTransitionRepository workflowTransitionRepository,
             EmployeeRepository employeeRepository,
-            WorkflowStatusRepository workflowStatusRepository
+            WorkflowStatusRepository workflowStatusRepository,
+            WorkflowActionRepository workflowActionRepository
     ) {
         this.workflowTransitionRepository = workflowTransitionRepository;
         this.employeeRepository = employeeRepository;
         this.workflowStatusRepository = workflowStatusRepository;
+        this.workflowActionRepository = workflowActionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -126,35 +130,12 @@ public class WorkflowService {
             CreateWorkflowTransitionRequest request,
             String employeeId
     ) {
-        SafeTransitionOption safeOption = findSafeTransitionOption(
-                request.getActionKey(),
-                request.getFromStatus(),
-                request.getToStatus()
-        );
-
-        if (safeOption == null) {
-            log.warn("event=workflow_transition_create_rejected employeeId={} actionKey={} fromStatus={} toStatus={} result=unsupported",
-                    employeeId,
-                    request.getActionKey(),
-                    request.getFromStatus(),
-                    request.getToStatus());
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported workflow transition");
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow transition request is required");
         }
+        String actionKey = validateTransitionActionKey(request.getActionKey());
 
-        if (workflowTransitionRepository.findByActionKeyAndFromStatusAndToStatus(
-                request.getActionKey(),
-                request.getFromStatus(),
-                request.getToStatus()
-        ).isPresent()) {
-            log.warn("event=workflow_transition_create_rejected employeeId={} actionKey={} fromStatus={} toStatus={} result=duplicate",
-                    employeeId,
-                    request.getActionKey(),
-                    request.getFromStatus(),
-                    request.getToStatus());
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Workflow transition already exists");
-        }
-
-        String displayName = request.getDisplayName().trim();
+        String displayName = request.getDisplayName() == null ? "" : request.getDisplayName().trim();
         if (displayName.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Display name cannot be blank");
         }
@@ -163,8 +144,58 @@ public class WorkflowService {
         Employee employee = employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
 
+        WorkflowTransition transition;
+        if (request.getFromStatusId() != null || request.getToStatusId() != null) {
+            transition = buildCustomTransition(request, actionKey, displayName, employee);
+        } else {
+            transition = buildSafeTransition(request, actionKey, displayName, employee);
+        }
+
+        WorkflowTransition saved = workflowTransitionRepository.save(transition);
+        log.info("event=workflow_transition_created employeeId={} transitionId={} actionKey={} fromStatus={} toStatus={} result=created",
+                employeeId,
+                saved.getId(),
+                saved.getActionKey(),
+                saved.getFromStatus(),
+                saved.getToStatus());
+        return WorkflowTransitionResponse.from(saved);
+    }
+
+    private WorkflowTransition buildSafeTransition(
+            CreateWorkflowTransitionRequest request,
+            String actionKey,
+            String displayName,
+            Employee employee
+    ) {
+        AccessKey systemActionKey = parseSystemWorkflowActionKey(actionKey);
+        SafeTransitionOption safeOption = findSafeTransitionOption(
+                systemActionKey,
+                request.getFromStatus(),
+                request.getToStatus()
+        );
+
+        if (safeOption == null) {
+            log.warn("event=workflow_transition_create_rejected actionKey={} fromStatus={} toStatus={} result=unsupported",
+                    actionKey,
+                    request.getFromStatus(),
+                    request.getToStatus());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported workflow transition");
+        }
+
+        if (workflowTransitionRepository.findByActionKeyAndFromStatusAndToStatus(
+                actionKey,
+                request.getFromStatus(),
+                request.getToStatus()
+        ).isPresent()) {
+            log.warn("event=workflow_transition_create_rejected actionKey={} fromStatus={} toStatus={} result=duplicate",
+                    actionKey,
+                    request.getFromStatus(),
+                    request.getToStatus());
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Workflow transition already exists");
+        }
+
         WorkflowTransition transition = new WorkflowTransition();
-        transition.setActionKey(request.getActionKey());
+        transition.setActionKey(actionKey);
         transition.setDisplayName(displayName);
         transition.setFromStatus(request.getFromStatus());
         transition.setToStatus(request.getToStatus());
@@ -175,15 +206,105 @@ public class WorkflowService {
         transition.setSystemTransition(false);
         transition.setProtectedTransition(false);
         transition.setUpdatedByEmployee(employee);
+        return transition;
+    }
 
-        WorkflowTransition saved = workflowTransitionRepository.save(transition);
-        log.info("event=workflow_transition_created employeeId={} transitionId={} actionKey={} fromStatus={} toStatus={} result=created",
-                employeeId,
-                saved.getId(),
-                saved.getActionKey(),
-                saved.getFromStatus(),
-                saved.getToStatus());
-        return WorkflowTransitionResponse.from(saved);
+    private WorkflowTransition buildCustomTransition(
+            CreateWorkflowTransitionRequest request,
+            String actionKey,
+            String displayName,
+            Employee employee
+    ) {
+        if (request.getFromStatusId() == null || request.getToStatusId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Custom workflow transitions require fromStatusId and toStatusId");
+        }
+
+        if (isProtectedFixedAction(actionKey)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Protected workflow action keys cannot be used for custom transitions");
+        }
+
+        workflowActionRepository.findByActionKey(actionKey)
+                .filter(action -> action.isActive() && !action.isProtectedAction())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active custom workflow action not found"));
+
+        WorkflowStatus fromStatus = findActiveStatus(request.getFromStatusId(), "Source workflow status not found");
+        WorkflowStatus toStatus = findActiveStatus(request.getToStatusId(), "Target workflow status not found");
+        validateCustomTransitionStatusPair(fromStatus, toStatus);
+
+        if (workflowTransitionRepository.findByActionKeyAndFromStatusRecord_IdAndToStatusRecord_Id(
+                actionKey,
+                fromStatus.getId(),
+                toStatus.getId()
+        ).isPresent()) {
+            log.warn("event=workflow_transition_create_rejected actionKey={} fromStatusId={} toStatusId={} result=duplicate",
+                    actionKey,
+                    fromStatus.getId(),
+                    toStatus.getId());
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Workflow transition already exists");
+        }
+
+        WorkflowTransition transition = new WorkflowTransition();
+        transition.setActionKey(actionKey);
+        transition.setDisplayName(displayName);
+        transition.setFromStatus(fromStatus.getBehaviorBucket());
+        transition.setToStatus(toStatus.getBehaviorBucket());
+        transition.setFromStatusRecord(fromStatus);
+        transition.setToStatusRecord(toStatus);
+        transition.setActive(request.getActive() == null || request.getActive());
+        transition.setSortOrder(request.getSortOrder());
+        transition.setSystemTransition(false);
+        transition.setProtectedTransition(false);
+        transition.setUpdatedByEmployee(employee);
+        return transition;
+    }
+
+    private WorkflowStatus findActiveStatus(Long statusId, String notFoundMessage) {
+        WorkflowStatus status = workflowStatusRepository.findById(statusId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, notFoundMessage));
+        if (!status.isActive()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow status is inactive");
+        }
+        return status;
+    }
+
+    private void validateCustomTransitionStatusPair(WorkflowStatus fromStatus, WorkflowStatus toStatus) {
+        if (fromStatus.getBehaviorBucket() == null || toStatus.getBehaviorBucket() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow statuses require behavior buckets");
+        }
+        if (fromStatus.isTerminal() || isTerminalStatus(fromStatus.getBehaviorBucket())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terminal workflow statuses cannot be transition sources");
+        }
+        if (toStatus.isTerminal() && toStatus.getBehaviorBucket() != TicketStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terminal custom target statuses must use COMPLETED behavior bucket");
+        }
+        if (toStatus.isTerminal() && (toStatus.isSystemStatus() || toStatus.isProtectedStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Custom transitions cannot target protected terminal statuses");
+        }
+        if (!toStatus.isTerminal() && isTerminalStatus(toStatus.getBehaviorBucket())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Non-terminal custom target statuses cannot use terminal behavior buckets");
+        }
+    }
+
+    private String validateTransitionActionKey(String rawActionKey) {
+        String actionKey = rawActionKey == null ? "" : rawActionKey.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!actionKey.matches("^[A-Z0-9_]{2,60}$")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Action key must contain 2 to 60 uppercase letters, digits, or underscores");
+        }
+        return actionKey;
+    }
+
+    private AccessKey parseSystemWorkflowActionKey(String actionKey) {
+        try {
+            AccessKey accessKey = AccessKey.valueOf(actionKey);
+            validateWorkflowActionKey(accessKey);
+            return accessKey;
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid workflow action key");
+        }
+    }
+
+    private boolean isProtectedFixedAction(String actionKey) {
+        return WORKFLOW_ACTION_KEYS.stream().anyMatch(accessKey -> accessKey.name().equals(actionKey));
     }
 
     @Transactional
@@ -196,12 +317,14 @@ public class WorkflowService {
             UpdateWorkflowTransitionRequest request,
             String employeeId
     ) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow transition request is required");
+        }
         WorkflowTransition transition = workflowTransitionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow transition not found"));
 
-        validateWorkflowActionKey(transition.getActionKey());
         validateTransitionStatusMetadata(transition);
-        if (isTerminalStatus(transition.getFromStatus())) {
+        if (isTerminalStatus(transition.getFromStatus()) || Boolean.TRUE.equals(transition.getFromStatusRecord().isTerminal())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terminal workflow transitions cannot be updated");
         }
 
@@ -288,7 +411,9 @@ public class WorkflowService {
     }
 
     private boolean isWorkflowStatusMetadataValid(WorkflowStatus workflowStatus, TicketStatus expectedStatus) {
-        return WorkflowStatusValidationHelper.isSystemStatusMetadataValid(workflowStatus, expectedStatus);
+        return WorkflowStatusValidationHelper.isSystemStatusMetadataValid(workflowStatus, expectedStatus)
+                || WorkflowStatusValidationHelper.evaluateCustomStatusExecutability(workflowStatus, true).executable()
+                && workflowStatus.getBehaviorBucket() == expectedStatus;
     }
 
     private SafeTransitionOption findSafeTransitionOption(
