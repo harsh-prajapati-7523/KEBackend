@@ -43,21 +43,21 @@ public class WorkflowTransitionRoleScopeValidator {
             return true;
         }
 
-        try {
-            Role role = resolveActiveRole(resolveActiveEmployee(employeeId));
-            return workflowTransitionRoleRuleRepository
-                    .existsByWorkflowTransition_IdAndRole_IdAndActiveTrue(transitionId, role.getId());
-        } catch (RuntimeException ex) {
+        Employee employee = resolveActiveEmployee(employeeId);
+        Role role = resolveActiveRole(employee);
+        if (role == null) {
             log.warn(
-                    "event=workflow_transition_role_scope_check_failed employeeId={} transitionId={} decision=deny",
+                    "event=workflow_transition_role_scope_denied employeeId={} transitionId={} reason=role_unavailable decision=deny",
                     employeeId,
                     transitionId
             );
             return false;
         }
+        return workflowTransitionRoleRuleRepository
+                .existsByWorkflowTransition_IdAndRole_IdAndActiveTrue(transitionId, role.getId());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public void requireAllowed(WorkflowTransition transition, String employeeId) {
         if (!isAllowed(transition, employeeId)) {
             log.warn(
@@ -71,21 +71,28 @@ public class WorkflowTransitionRoleScopeValidator {
 
     private Employee resolveActiveEmployee(String employeeId) {
         String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
-        Employee employee = employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
+        Employee employee = employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId).orElse(null);
+        if (employee == null) {
+            log.warn("event=workflow_transition_role_scope_denied employeeId={} reason=employee_missing decision=deny", employeeId);
+            return null;
+        }
         if (!employee.isActive()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Inactive employee");
+            log.warn("event=workflow_transition_role_scope_denied employeeId={} reason=employee_inactive decision=deny", employeeId);
+            return null;
         }
         return employee;
     }
 
     private Role resolveActiveRole(Employee employee) {
+        if (employee == null) {
+            return null;
+        }
         Role role = employee.getRoleRecord();
         if (role == null && employee.getRole() != null) {
             role = roleRepository.findByRoleKey(employee.getRole().name()).orElse(null);
         }
         if (role == null || !role.isActive()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Inactive role");
+            return null;
         }
         return role;
     }

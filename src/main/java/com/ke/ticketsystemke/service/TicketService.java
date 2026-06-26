@@ -158,7 +158,7 @@ public class TicketService {
         return toTicketResponse(saved, BigDecimal.ZERO.setScale(2));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public TicketAvailableActionsResponse getAvailableActions(
             Long ticketId,
             String employeeId,
@@ -448,10 +448,11 @@ public class TicketService {
                         genericTransitionExecutorService.prepareExecution(ticket.getId(), candidate.getId(), employeeId);
                 dynamicActions.add(toDynamicActionResponse(plan));
             } catch (ResponseStatusException ex) {
-                log.debug(
-                        "event=ticket_dynamic_action_hidden ticketId={} transitionId={} status={} reason={}",
+                log.info(
+                        "event=ticket_dynamic_action_hidden ticketId={} transitionId={} actionKey={} status={} reason={}",
                         ticket.getId(),
                         candidate.getId(),
+                        candidate.getActionKey(),
                         ex.getStatusCode(),
                         ex.getReason()
                 );

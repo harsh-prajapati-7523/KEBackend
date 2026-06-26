@@ -140,7 +140,7 @@ public class GenericTransitionExecutorService {
         );
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public GenericTransitionExecutionPlan prepareExecution(
             Long ticketId,
             Long workflowTransitionId,

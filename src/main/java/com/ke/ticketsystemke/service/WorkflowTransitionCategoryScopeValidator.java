@@ -39,21 +39,20 @@ public class WorkflowTransitionCategoryScopeValidator {
             return true;
         }
 
-        try {
-            TicketCategoryConfig category = resolveActiveCategory(ticket);
-            return workflowTransitionCategoryRuleRepository
-                    .existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(transitionId, category.getId());
-        } catch (RuntimeException ex) {
+        TicketCategoryConfig category = resolveActiveCategory(ticket);
+        if (category == null) {
             log.warn(
-                    "event=workflow_transition_category_scope_check_failed ticketId={} transitionId={} decision=deny",
+                    "event=workflow_transition_category_scope_denied ticketId={} transitionId={} reason=category_unavailable decision=deny",
                     ticket == null ? null : ticket.getId(),
                     transitionId
             );
             return false;
         }
+        return workflowTransitionCategoryRuleRepository
+                .existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(transitionId, category.getId());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public void requireAllowed(WorkflowTransition transition, Ticket ticket) {
         if (!isAllowed(transition, ticket)) {
             log.warn(
@@ -67,7 +66,7 @@ public class WorkflowTransitionCategoryScopeValidator {
 
     private TicketCategoryConfig resolveActiveCategory(Ticket ticket) {
         if (ticket == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket category is required");
+            return null;
         }
 
         TicketCategoryConfig category = ticket.getCategoryRecord();
@@ -75,7 +74,7 @@ public class WorkflowTransitionCategoryScopeValidator {
             category = ticketCategoryRepository.findByCategoryKey(ticket.getCategory().name()).orElse(null);
         }
         if (category == null || !category.isActive()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket category is not available");
+            return null;
         }
         return category;
     }
