@@ -341,21 +341,55 @@ INSERT INTO workflow_transitions (
     created_at,
     updated_at
 )
-VALUES
-    ('PICK_TICKET', 'Pick Ticket', 'NEW', 'PICKED', TRUE, 10, TRUE, TRUE, now(), now()),
-    ('PICK_TICKET', 'Pick Ticket', 'PICKED', 'PICKED', TRUE, 20, TRUE, TRUE, now(), now()),
-    ('START_WORK', 'Start Work', 'PICKED', 'IN_PROGRESS', TRUE, 30, TRUE, TRUE, now(), now()),
-    ('COMPLETE_TICKET', 'Complete Ticket', 'IN_PROGRESS', 'COMPLETED', TRUE, 40, TRUE, TRUE, now(), now()),
-    ('CANCEL_TICKET', 'Cancel Ticket', 'NEW', 'CANCELLED', TRUE, 50, TRUE, TRUE, now(), now()),
-    ('CANCEL_TICKET', 'Cancel Ticket', 'PICKED', 'CANCELLED', TRUE, 60, TRUE, TRUE, now(), now()),
-    ('CANCEL_TICKET', 'Cancel Ticket', 'IN_PROGRESS', 'CANCELLED', TRUE, 70, TRUE, TRUE, now(), now())
-ON CONFLICT (action_key, from_status, to_status) DO UPDATE
+SELECT
+    fixed.action_key,
+    fixed.display_name,
+    fixed.from_status,
+    fixed.to_status,
+    TRUE,
+    fixed.sort_order,
+    TRUE,
+    TRUE,
+    now(),
+    now()
+FROM (
+    VALUES
+        ('PICK_TICKET', 'Pick Ticket', 'NEW', 'PICKED', 10),
+        ('PICK_TICKET', 'Pick Ticket', 'PICKED', 'PICKED', 20),
+        ('START_WORK', 'Start Work', 'PICKED', 'IN_PROGRESS', 30),
+        ('COMPLETE_TICKET', 'Complete Ticket', 'IN_PROGRESS', 'COMPLETED', 40),
+        ('CANCEL_TICKET', 'Cancel Ticket', 'NEW', 'CANCELLED', 50),
+        ('CANCEL_TICKET', 'Cancel Ticket', 'PICKED', 'CANCELLED', 60),
+        ('CANCEL_TICKET', 'Cancel Ticket', 'IN_PROGRESS', 'CANCELLED', 70)
+) AS fixed(action_key, display_name, from_status, to_status, sort_order)
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM workflow_transitions existing
+    WHERE existing.action_key = fixed.action_key
+      AND existing.from_status = fixed.from_status
+      AND existing.to_status = fixed.to_status
+);
+
+UPDATE workflow_transitions transition
 SET
-    display_name = EXCLUDED.display_name,
-    sort_order = EXCLUDED.sort_order,
+    display_name = fixed.display_name,
+    sort_order = fixed.sort_order,
     system_transition = TRUE,
     protected_transition = TRUE,
-    updated_at = now();
+    updated_at = now()
+FROM (
+    VALUES
+        ('PICK_TICKET', 'Pick Ticket', 'NEW', 'PICKED', 10),
+        ('PICK_TICKET', 'Pick Ticket', 'PICKED', 'PICKED', 20),
+        ('START_WORK', 'Start Work', 'PICKED', 'IN_PROGRESS', 30),
+        ('COMPLETE_TICKET', 'Complete Ticket', 'IN_PROGRESS', 'COMPLETED', 40),
+        ('CANCEL_TICKET', 'Cancel Ticket', 'NEW', 'CANCELLED', 50),
+        ('CANCEL_TICKET', 'Cancel Ticket', 'PICKED', 'CANCELLED', 60),
+        ('CANCEL_TICKET', 'Cancel Ticket', 'IN_PROGRESS', 'CANCELLED', 70)
+) AS fixed(action_key, display_name, from_status, to_status, sort_order)
+WHERE transition.action_key = fixed.action_key
+  AND transition.from_status = fixed.from_status
+  AND transition.to_status = fixed.to_status;
 
 CREATE TABLE IF NOT EXISTS workflow_actions (
     id BIGSERIAL PRIMARY KEY,
