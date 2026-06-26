@@ -16,6 +16,7 @@ public class CreateTicketRequest {
     @Pattern(regexp = "\\d{10}", message = "mobileNumber must contain exactly 10 digits")
     private String mobileNumber;
 
+    @NotBlank
     private String villageOrArea;
 
     @NotBlank
@@ -25,7 +26,6 @@ public class CreateTicketRequest {
 
     private Long categoryId;
 
-    @NotBlank
     private String complaintDescription;
 
     private List<CreateTicketDynamicValueRequest> dynamicValues = new ArrayList<>();

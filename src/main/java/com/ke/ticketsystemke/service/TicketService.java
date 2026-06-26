@@ -146,7 +146,7 @@ public class TicketService {
         ticket.setVillageOrArea(trimToNull(request.getVillageOrArea()));
         ticket.setProductType(request.getProductType().trim());
         assignCategory(ticket, category);
-        ticket.setComplaintDescription(request.getComplaintDescription().trim());
+        ticket.setComplaintDescription(trimToEmpty(request.getComplaintDescription()));
         ticket.setStatus(TicketStatus.NEW);
         ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.NEW));
         ticket.setCreatedByEmployeeId(createdByEmployeeId);
@@ -1109,6 +1109,14 @@ public class TicketService {
     private String trimToNull(String value) {
         if (value == null || value.isBlank()) {
             return null;
+        }
+
+        return value.trim();
+    }
+
+    private String trimToEmpty(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
         }
 
         return value.trim();
