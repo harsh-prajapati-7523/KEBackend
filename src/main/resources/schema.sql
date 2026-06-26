@@ -546,6 +546,9 @@ SET
     sort_order = EXCLUDED.sort_order,
     updated_at = now();
 
+ALTER TABLE workflow_transitions
+    DROP CONSTRAINT IF EXISTS uk_workflow_transitions_action_from_to_status_id;
+
 UPDATE workflow_transitions wt
 SET from_status_id = ws.id
 FROM workflow_statuses ws
@@ -567,6 +570,15 @@ WHERE wt.to_status = ws.status_key
   AND ws.active = TRUE
   AND ws.behavior_bucket = wt.to_status
   AND (wt.to_status_id IS NULL OR wt.to_status_id <> ws.id);
+
+DELETE FROM workflow_transitions duplicate
+USING workflow_transitions kept
+WHERE duplicate.id > kept.id
+  AND duplicate.action_key = kept.action_key
+  AND duplicate.from_status_id = kept.from_status_id
+  AND duplicate.to_status_id = kept.to_status_id
+  AND duplicate.from_status_id IS NOT NULL
+  AND duplicate.to_status_id IS NOT NULL;
 
 ALTER TABLE workflow_transitions
     ALTER COLUMN from_status_id SET NOT NULL;
