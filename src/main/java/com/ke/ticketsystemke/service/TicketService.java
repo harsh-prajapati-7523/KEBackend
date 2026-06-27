@@ -99,6 +99,7 @@ public class TicketService {
     private final EffectiveStatusResolver effectiveStatusResolver;
     private final GenericTransitionExecutorService genericTransitionExecutorService;
     private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
+    private final RepairWorkflowFeatureFlag repairWorkflowFeatureFlag;
 
     public TicketService(
             TicketRepository repository,
@@ -113,7 +114,8 @@ public class TicketService {
             WorkflowTransitionRepository workflowTransitionRepository,
             EffectiveStatusResolver effectiveStatusResolver,
             GenericTransitionExecutorService genericTransitionExecutorService,
-            TicketWorkflowHistoryService ticketWorkflowHistoryService
+            TicketWorkflowHistoryService ticketWorkflowHistoryService,
+            RepairWorkflowFeatureFlag repairWorkflowFeatureFlag
     ) {
         this.repository = repository;
         this.ticketCategoryRepository = ticketCategoryRepository;
@@ -128,6 +130,7 @@ public class TicketService {
         this.effectiveStatusResolver = effectiveStatusResolver;
         this.genericTransitionExecutorService = genericTransitionExecutorService;
         this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
+        this.repairWorkflowFeatureFlag = repairWorkflowFeatureFlag;
     }
 
     @Transactional
@@ -451,6 +454,15 @@ public class TicketService {
             if (isProtectedFixedAction(candidate.getActionKey())) {
                 continue;
             }
+            if (isDisabledRepairWorkflowAction(candidate)) {
+                log.info(
+                        "event=ticket_dynamic_action_skipped ticketId={} transitionId={} actionKey={} reason=repair_workflow_disabled",
+                        ticket.getId(),
+                        candidate.getId(),
+                        candidate.getActionKey()
+                );
+                continue;
+            }
             if (isLegacySystemOnlyDynamicTransition(candidate)) {
                 log.warn(
                         "event=ticket_dynamic_action_skipped ticketId={} transitionId={} actionKey={} currentStatusId={} reason=legacy_system_only_dynamic_transition",
@@ -504,6 +516,12 @@ public class TicketService {
     private boolean isExactCurrentStatusTransition(WorkflowTransition transition, Long currentStatusId) {
         Long fromStatusId = transition == null ? null : resolveStatusRecordId(transition.getFromStatusRecord());
         return currentStatusId != null && currentStatusId.equals(fromStatusId);
+    }
+
+    private boolean isDisabledRepairWorkflowAction(WorkflowTransition transition) {
+        return !repairWorkflowFeatureFlag.isEnabled()
+                && transition != null
+                && repairWorkflowFeatureFlag.isRepairWorkflowAction(transition.getActionKey());
     }
 
     private boolean isLegacySystemOnlyDynamicTransition(WorkflowTransition transition) {

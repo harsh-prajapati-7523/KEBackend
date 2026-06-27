@@ -231,11 +231,11 @@ public class WorkflowService {
         WorkflowStatus toStatus = findActiveStatus(request.getToStatusId(), "Target workflow status not found");
         validateCustomTransitionStatusPair(fromStatus, toStatus);
 
-        if (workflowTransitionRepository.findByActionKeyAndFromStatusRecord_IdAndToStatusRecord_Id(
+        if (!workflowTransitionRepository.findAllByActionKeyAndFromStatusRecord_IdAndToStatusRecord_IdOrderByIdAsc(
                 actionKey,
                 fromStatus.getId(),
                 toStatus.getId()
-        ).isPresent()) {
+        ).isEmpty()) {
             log.warn("event=workflow_transition_create_rejected actionKey={} fromStatusId={} toStatusId={} result=duplicate",
                     actionKey,
                     fromStatus.getId(),

@@ -571,14 +571,11 @@ WHERE wt.to_status = ws.status_key
   AND ws.behavior_bucket = wt.to_status
   AND (wt.to_status_id IS NULL OR wt.to_status_id <> ws.id);
 
-DELETE FROM workflow_transitions duplicate
-USING workflow_transitions kept
-WHERE duplicate.id > kept.id
-  AND duplicate.action_key = kept.action_key
-  AND duplicate.from_status_id = kept.from_status_id
-  AND duplicate.to_status_id = kept.to_status_id
-  AND duplicate.from_status_id IS NOT NULL
-  AND duplicate.to_status_id IS NOT NULL;
+-- Emergency containment:
+-- Do not delete duplicate workflow_transitions here. Existing rows may already be
+-- referenced by ticket_workflow_history, and deleting them breaks startup through
+-- the history FK. Application-level workflow seed logic is responsible for
+-- idempotency without damaging history.
 
 ALTER TABLE workflow_transitions
     ALTER COLUMN from_status_id SET NOT NULL;
@@ -606,9 +603,8 @@ ALTER TABLE workflow_transitions
 ALTER TABLE workflow_transitions
     DROP CONSTRAINT IF EXISTS uk_workflow_transitions_action_from_to_status_id;
 
-ALTER TABLE workflow_transitions
-    ADD CONSTRAINT uk_workflow_transitions_action_from_to_status_id
-    UNIQUE (action_key, from_status_id, to_status_id);
+CREATE INDEX IF NOT EXISTS idx_workflow_transitions_action_from_to_status_id
+    ON workflow_transitions(action_key, from_status_id, to_status_id);
 
 CREATE INDEX IF NOT EXISTS idx_workflow_transitions_from_status_id
     ON workflow_transitions(from_status_id);

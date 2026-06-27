@@ -13,19 +13,12 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.Locale;
 
 @Entity
-@Table(
-        name = "workflow_transitions",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_workflow_transitions_action_from_to_status_id",
-                columnNames = {"action_key", "from_status_id", "to_status_id"}
-        )
-)
+@Table(name = "workflow_transitions")
 public class WorkflowTransition {
 
     @Id

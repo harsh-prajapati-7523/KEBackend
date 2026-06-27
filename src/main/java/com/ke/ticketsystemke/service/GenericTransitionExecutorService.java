@@ -40,6 +40,7 @@ public class GenericTransitionExecutorService {
     private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
     private final WorkflowTransitionRoleScopeValidator workflowTransitionRoleScopeValidator;
     private final WorkflowTransitionCategoryScopeValidator workflowTransitionCategoryScopeValidator;
+    private final RepairWorkflowFeatureFlag repairWorkflowFeatureFlag;
 
     public GenericTransitionExecutorService(
             TicketRepository ticketRepository,
@@ -51,7 +52,8 @@ public class GenericTransitionExecutorService {
             TicketChargeService ticketChargeService,
             TicketWorkflowHistoryService ticketWorkflowHistoryService,
             WorkflowTransitionRoleScopeValidator workflowTransitionRoleScopeValidator,
-            WorkflowTransitionCategoryScopeValidator workflowTransitionCategoryScopeValidator
+            WorkflowTransitionCategoryScopeValidator workflowTransitionCategoryScopeValidator,
+            RepairWorkflowFeatureFlag repairWorkflowFeatureFlag
     ) {
         this.ticketRepository = ticketRepository;
         this.workflowTransitionRepository = workflowTransitionRepository;
@@ -63,6 +65,7 @@ public class GenericTransitionExecutorService {
         this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
         this.workflowTransitionRoleScopeValidator = workflowTransitionRoleScopeValidator;
         this.workflowTransitionCategoryScopeValidator = workflowTransitionCategoryScopeValidator;
+        this.repairWorkflowFeatureFlag = repairWorkflowFeatureFlag;
     }
 
     @Transactional(readOnly = true)
@@ -156,6 +159,7 @@ public class GenericTransitionExecutorService {
         WorkflowStatus fromStatus = resolveWorkflowStatus(transition.getFromStatusRecord(), transition.getFromStatus());
         WorkflowStatus toStatus = resolveWorkflowStatus(transition.getToStatusRecord(), transition.getToStatus());
 
+        validateRepairWorkflowEnabled(transition);
         validateTransitionActive(transition);
         validateCurrentStatus(ticket, currentStatus, transition);
         TicketStatus toStatusBehaviorBucket = resolveTargetStatusBehaviorBucket(toStatus, transition.getToStatus());
@@ -203,6 +207,13 @@ public class GenericTransitionExecutorService {
     private void validateTransitionActive(WorkflowTransition transition) {
         if (!transition.isActive()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow transition is not active");
+        }
+    }
+
+    private void validateRepairWorkflowEnabled(WorkflowTransition transition) {
+        if (!repairWorkflowFeatureFlag.isEnabled()
+                && repairWorkflowFeatureFlag.isRepairWorkflowAction(transition.getActionKey())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Repair workflow is disabled");
         }
     }
 

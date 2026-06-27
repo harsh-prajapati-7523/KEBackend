@@ -13,6 +13,7 @@ import com.ke.ticketsystemke.repository.RoleRepository;
 import com.ke.ticketsystemke.repository.WorkflowActionRepository;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
 import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
+import com.ke.ticketsystemke.service.RepairWorkflowFeatureFlag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -93,6 +94,7 @@ public class RepairWorkflowConfigurationInitializer implements ApplicationRunner
     private final AccessKeyMetadataRepository accessKeyMetadataRepository;
     private final RoleRepository roleRepository;
     private final RoleAccessRuleRepository roleAccessRuleRepository;
+    private final RepairWorkflowFeatureFlag repairWorkflowFeatureFlag;
 
     public RepairWorkflowConfigurationInitializer(
             WorkflowStatusRepository workflowStatusRepository,
@@ -100,7 +102,8 @@ public class RepairWorkflowConfigurationInitializer implements ApplicationRunner
             WorkflowTransitionRepository workflowTransitionRepository,
             AccessKeyMetadataRepository accessKeyMetadataRepository,
             RoleRepository roleRepository,
-            RoleAccessRuleRepository roleAccessRuleRepository
+            RoleAccessRuleRepository roleAccessRuleRepository,
+            RepairWorkflowFeatureFlag repairWorkflowFeatureFlag
     ) {
         this.workflowStatusRepository = workflowStatusRepository;
         this.workflowActionRepository = workflowActionRepository;
@@ -108,6 +111,7 @@ public class RepairWorkflowConfigurationInitializer implements ApplicationRunner
         this.accessKeyMetadataRepository = accessKeyMetadataRepository;
         this.roleRepository = roleRepository;
         this.roleAccessRuleRepository = roleAccessRuleRepository;
+        this.repairWorkflowFeatureFlag = repairWorkflowFeatureFlag;
     }
 
     @Override
@@ -116,8 +120,13 @@ public class RepairWorkflowConfigurationInitializer implements ApplicationRunner
         Map<String, WorkflowStatus> statusesByKey = ensureStatuses();
         Map<String, WorkflowAction> actionsByKey = ensureActions();
         ensureAccessMetadata(actionsByKey);
-        ensureSuperAdminGrants(actionsByKey);
+        if (repairWorkflowFeatureFlag.isEnabled()) {
+            ensureSuperAdminGrants(actionsByKey);
+        }
         ensureTransitions(statusesByKey, actionsByKey);
+        if (!repairWorkflowFeatureFlag.isEnabled()) {
+            deactivateRepairWorkflowTransitions();
+        }
         log.info("event=repair_workflow_configuration_ensured statusCount={} actionCount={} transitionCount={}",
                 STATUS_SEEDS.size(), ACTION_SEEDS.size(), TRANSITION_SEEDS.size());
     }
@@ -254,24 +263,46 @@ public class RepairWorkflowConfigurationInitializer implements ApplicationRunner
                 throw new IllegalStateException("Repair workflow transition seed is missing metadata: " + seed);
             }
 
-            workflowTransitionRepository.findByActionKeyAndFromStatusRecord_IdAndToStatusRecord_Id(
+            List<WorkflowTransition> existingTransitions = workflowTransitionRepository
+                    .findAllByActionKeyAndFromStatusRecord_IdAndToStatusRecord_IdOrderByIdAsc(
                     seed.actionKey(),
                     fromStatus.getId(),
                     toStatus.getId()
-            ).orElseGet(() -> {
-                WorkflowTransition transition = new WorkflowTransition();
-                transition.setActionKey(seed.actionKey());
-                transition.setDisplayName(seed.displayName());
-                transition.setFromStatus(fromStatus.getBehaviorBucket());
-                transition.setToStatus(toStatus.getBehaviorBucket());
-                transition.setFromStatusRecord(fromStatus);
-                transition.setToStatusRecord(toStatus);
-                transition.setActive(true);
-                transition.setSortOrder(seed.sortOrder());
-                transition.setSystemTransition(false);
-                transition.setProtectedTransition(false);
-                return workflowTransitionRepository.save(transition);
-            });
+            );
+            if (!existingTransitions.isEmpty()) {
+                WorkflowTransition transition = existingTransitions.get(0);
+                boolean expectedActive = repairWorkflowFeatureFlag.isEnabled();
+                if (transition.isActive() != expectedActive) {
+                    transition.setActive(expectedActive);
+                    workflowTransitionRepository.save(transition);
+                }
+                continue;
+            }
+
+            WorkflowTransition transition = new WorkflowTransition();
+            transition.setActionKey(seed.actionKey());
+            transition.setDisplayName(seed.displayName());
+            transition.setFromStatus(fromStatus.getBehaviorBucket());
+            transition.setToStatus(toStatus.getBehaviorBucket());
+            transition.setFromStatusRecord(fromStatus);
+            transition.setToStatusRecord(toStatus);
+            transition.setActive(repairWorkflowFeatureFlag.isEnabled());
+            transition.setSortOrder(seed.sortOrder());
+            transition.setSystemTransition(false);
+            transition.setProtectedTransition(false);
+            workflowTransitionRepository.save(transition);
+        }
+    }
+
+    private void deactivateRepairWorkflowTransitions() {
+        List<WorkflowTransition> transitions = workflowTransitionRepository
+                .findByActionKeyIn(repairWorkflowFeatureFlag.repairWorkflowActionKeys());
+        for (WorkflowTransition transition : transitions) {
+            if (!transition.isActive()) {
+                continue;
+            }
+            transition.setActive(false);
+            workflowTransitionRepository.save(transition);
         }
     }
 
