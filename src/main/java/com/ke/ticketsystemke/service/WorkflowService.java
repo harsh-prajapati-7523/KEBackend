@@ -393,6 +393,9 @@ public class WorkflowService {
             transition = buildSafeTransition(request, actionKey, displayName, employee);
         }
 
+        if (transition.isActive()) {
+            validateTransitionActivation(transition);
+        }
         WorkflowTransition saved = workflowTransitionRepository.save(transition);
         log.info("event=workflow_transition_created employeeId={} transitionId={} actionKey={} fromStatus={} toStatus={} result=created",
                 employeeId,
@@ -586,6 +589,10 @@ public class WorkflowService {
             transition.setSortOrder(request.getSortOrder());
         }
 
+        if (transition.isActive()) {
+            validateTransitionActivation(transition);
+        }
+
         String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
         Employee employee = employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
@@ -618,6 +625,80 @@ public class WorkflowService {
 
     private boolean isTerminalStatus(TicketStatus status) {
         return status == TicketStatus.COMPLETED || status == TicketStatus.CANCELLED;
+    }
+
+    private void validateTransitionActivation(WorkflowTransition transition) {
+        if (transition.getFromStatusRecord() == null || transition.getToStatusRecord() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow transition requires exact status metadata");
+        }
+        if (!transition.getFromStatusRecord().isActive()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source workflow status is inactive");
+        }
+        if (!transition.getToStatusRecord().isActive()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target workflow status is inactive");
+        }
+        if (transition.getFromStatusRecord().isTerminal()
+                || isTerminalStatus(transition.getFromStatusRecord().getBehaviorBucket())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terminal workflow statuses cannot be transition sources");
+        }
+
+        boolean protectedAction = workflowActionRepository.findByActionKey(transition.getActionKey())
+                .filter(action -> action.isActive())
+                .map(action -> action.isProtectedAction() || isProtectedFixedAction(action.getActionKey()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow action is inactive or missing"));
+
+        if (!transition.isProtectedTransition() && !protectedAction) {
+            validateCustomTransitionStatusPair(transition.getFromStatusRecord(), transition.getToStatusRecord());
+        }
+        validateNoAmbiguousActivation(transition);
+    }
+
+    private void validateNoAmbiguousActivation(WorkflowTransition transition) {
+        if (transition.getFromStatusRecord() == null || transition.getFromStatusRecord().getId() == null) {
+            return;
+        }
+
+        List<WorkflowTransition> matchingTransitions = workflowTransitionRepository
+                .findByActionKeyAndFromStatusRecord_IdAndActiveTrueOrderByIdAsc(
+                        transition.getActionKey(),
+                        transition.getFromStatusRecord().getId()
+                )
+                .stream()
+                .filter(candidate -> transition.getId() == null || !transition.getId().equals(candidate.getId()))
+                .filter(candidate -> isActionActive(candidate.getActionKey()))
+                .toList();
+
+        for (WorkflowTransition candidate : matchingTransitions) {
+            if (hasCategoryOverlap(transition, candidate)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Workflow transition activation would create ambiguous action/status/category matches"
+                );
+            }
+        }
+    }
+
+    private boolean hasCategoryOverlap(WorkflowTransition first, WorkflowTransition second) {
+        for (TicketCategoryConfig category : ticketCategoryRepository.findAll()) {
+            if (!category.isActive()) {
+                continue;
+            }
+            if (isCategoryAllowedForActivation(first, category.getId())
+                    && isCategoryAllowedForActivation(second, category.getId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isCategoryAllowedForActivation(WorkflowTransition transition, Long categoryId) {
+        if (transition == null || categoryId == null) {
+            return false;
+        }
+        if (transition.getId() == null) {
+            return true;
+        }
+        return isCategoryAllowed(transition, categoryId);
     }
 
     private WorkflowStatus resolveWorkflowStatusForTicketStatus(TicketStatus status) {

@@ -68,6 +68,9 @@ class TicketServiceAvailableActionsTest {
     @Mock
     private TicketWorkflowHistoryService ticketWorkflowHistoryService;
 
+    @Mock
+    private RepairWorkflowFeatureFlag repairWorkflowFeatureFlag;
+
     private TicketService ticketService;
 
     @BeforeEach
@@ -85,7 +88,8 @@ class TicketServiceAvailableActionsTest {
                 workflowTransitionRepository,
                 effectiveStatusResolver,
                 genericTransitionExecutorService,
-                ticketWorkflowHistoryService
+                ticketWorkflowHistoryService,
+                repairWorkflowFeatureFlag
         );
 
         lenient().when(accessService.isAllowed(eq("tech-1"), any(AccessKey.class))).thenReturn(true);

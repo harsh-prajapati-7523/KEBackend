@@ -1,6 +1,7 @@
 package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.CreateWorkflowActionRequest;
+import com.ke.ticketsystemke.dto.UpdateWorkflowActionRequest;
 import com.ke.ticketsystemke.dto.WorkflowActionResponse;
 import com.ke.ticketsystemke.config.CacheNames;
 import com.ke.ticketsystemke.entity.AccessKey;
@@ -56,7 +57,9 @@ public class WorkflowActionService {
     @Transactional
     @CacheEvict(cacheNames = {
             CacheNames.WORKFLOW_ACTIONS,
-            CacheNames.ACCESS_KEY_METADATA
+            CacheNames.ACCESS_KEY_METADATA,
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
     }, allEntries = true)
     public WorkflowActionResponse createAction(CreateWorkflowActionRequest request, String employeeId) {
         if (request == null) {
@@ -95,6 +98,82 @@ public class WorkflowActionService {
         }
     }
 
+    @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_ACTIONS,
+            CacheNames.ACCESS_KEY_METADATA,
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
+    public WorkflowActionResponse updateAction(
+            Long id,
+            UpdateWorkflowActionRequest request,
+            String employeeId
+    ) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow action request is required");
+        }
+
+        WorkflowAction action = findAction(id);
+        requireCustomEditable(action, employeeId, "update");
+
+        if (request.getDisplayName() != null) {
+            action.setDisplayName(validateRequiredText(request.getDisplayName(), "Display name", DISPLAY_NAME_MAX_LENGTH));
+        }
+        if (request.getButtonLabel() != null) {
+            action.setButtonLabel(validateOptionalText(request.getButtonLabel(), "Button label", BUTTON_LABEL_MAX_LENGTH, action.getDisplayName()));
+        }
+        if (request.getDescription() != null) {
+            action.setDescription(validateOptionalText(request.getDescription(), "Description", DESCRIPTION_MAX_LENGTH, null));
+        }
+        if (request.getSortOrder() != null) {
+            action.setSortOrder(request.getSortOrder());
+        }
+        if (request.getRequiresComment() != null) {
+            action.setRequiresComment(request.getRequiresComment());
+        }
+        if (request.getConfirmationRequired() != null) {
+            action.setConfirmationRequired(request.getConfirmationRequired());
+        }
+
+        WorkflowAction saved = workflowActionRepository.save(action);
+        syncAccessMetadata(saved);
+        log.info("event=workflow_action_updated employeeId={} actionId={} actionKey={} result=updated",
+                employeeId, saved.getId(), saved.getActionKey());
+        return WorkflowActionResponse.from(saved);
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_ACTIONS,
+            CacheNames.ACCESS_KEY_METADATA,
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
+    public WorkflowActionResponse updateActionState(
+            Long id,
+            Boolean active,
+            String employeeId
+    ) {
+        if (active == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active state is required");
+        }
+
+        WorkflowAction action = findAction(id);
+        requireCustomEditable(action, employeeId, active ? "enable" : "disable");
+        action.setActive(active);
+
+        WorkflowAction saved = workflowActionRepository.save(action);
+        syncAccessMetadata(saved);
+        log.info("event={} employeeId={} actionId={} actionKey={} active={} result=updated",
+                active ? "workflow_action_enabled" : "workflow_action_disabled",
+                employeeId,
+                saved.getId(),
+                saved.getActionKey(),
+                saved.isActive());
+        return WorkflowActionResponse.from(saved);
+    }
+
     private void ensureAccessMetadata(WorkflowAction action) {
         if (accessKeyMetadataRepository.existsByAccessKey(action.getActionKey())) {
             return;
@@ -110,6 +189,42 @@ public class WorkflowActionService {
         metadata.setProtectedKey(false);
         metadata.setSortOrder(action.getSortOrder());
         accessKeyMetadataRepository.save(metadata);
+    }
+
+    private void syncAccessMetadata(WorkflowAction action) {
+        AccessKeyMetadata metadata = accessKeyMetadataRepository.findByAccessKey(action.getActionKey())
+                .orElseGet(() -> {
+                    AccessKeyMetadata created = new AccessKeyMetadata();
+                    created.setAccessKey(action.getActionKey());
+                    created.setSystemKey(false);
+                    created.setProtectedKey(false);
+                    created.setCategory(ACCESS_CATEGORY);
+                    return created;
+                });
+
+        if (metadata.isSystemKey() || metadata.isProtectedKey()) {
+            return;
+        }
+
+        metadata.setDisplayName(action.getDisplayName());
+        metadata.setDescription(action.getDescription());
+        metadata.setCategory(ACCESS_CATEGORY);
+        metadata.setActive(action.isActive());
+        metadata.setSortOrder(action.getSortOrder());
+        accessKeyMetadataRepository.save(metadata);
+    }
+
+    private WorkflowAction findAction(Long id) {
+        return workflowActionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow action not found"));
+    }
+
+    private void requireCustomEditable(WorkflowAction action, String employeeId, String operation) {
+        if (action.isSystemAction() || action.isProtectedAction() || isProtectedSystemAction(action.getActionKey())) {
+            log.warn("event=workflow_action_{}_rejected employeeId={} actionId={} actionKey={} result=protected",
+                    operation, employeeId, action.getId(), action.getActionKey());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "System and protected workflow actions are read-only");
+        }
     }
 
     private String validateNewActionKey(String rawActionKey) {
