@@ -58,9 +58,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class TicketService {
@@ -431,16 +433,54 @@ public class TicketService {
     }
 
     private List<TicketDynamicActionResponse> evaluateDynamicActions(Ticket ticket, String employeeId) {
-        if (ticket.getStatus() == null) {
+        Long currentStatusId = resolveStatusRecordId(ticket);
+        if (currentStatusId == null) {
+            log.warn(
+                    "event=ticket_dynamic_actions_skipped ticketId={} status={} reason=status_record_missing",
+                    ticket.getId(),
+                    ticket.getStatus()
+            );
             return List.of();
         }
 
         List<TicketDynamicActionResponse> dynamicActions = new ArrayList<>();
-        List<WorkflowTransition> candidates = ticket.getStatusRecord() != null && ticket.getStatusRecord().getId() != null
-                ? workflowTransitionRepository.findByFromStatusRecord_IdAndActiveTrueOrderBySortOrderAscIdAsc(ticket.getStatusRecord().getId())
-                : workflowTransitionRepository.findByFromStatusAndActiveTrueOrderBySortOrderAscIdAsc(ticket.getStatus());
+        Set<String> seenTransitionKeys = new LinkedHashSet<>();
+        List<WorkflowTransition> candidates = workflowTransitionRepository
+                .findByFromStatusRecord_IdAndActiveTrueOrderBySortOrderAscIdAsc(currentStatusId);
         for (WorkflowTransition candidate : candidates) {
             if (isProtectedFixedAction(candidate.getActionKey())) {
+                continue;
+            }
+            if (isLegacySystemOnlyDynamicTransition(candidate)) {
+                log.warn(
+                        "event=ticket_dynamic_action_skipped ticketId={} transitionId={} actionKey={} currentStatusId={} reason=legacy_system_only_dynamic_transition",
+                        ticket.getId(),
+                        candidate.getId(),
+                        candidate.getActionKey(),
+                        currentStatusId
+                );
+                continue;
+            }
+            if (!isExactCurrentStatusTransition(candidate, currentStatusId)) {
+                log.warn(
+                        "event=ticket_dynamic_action_skipped ticketId={} transitionId={} actionKey={} currentStatusId={} fromStatusId={} reason=from_status_mismatch",
+                        ticket.getId(),
+                        candidate.getId(),
+                        candidate.getActionKey(),
+                        currentStatusId,
+                        resolveStatusRecordId(candidate.getFromStatusRecord())
+                );
+                continue;
+            }
+            String transitionKey = dynamicTransitionKey(candidate);
+            if (!seenTransitionKeys.add(transitionKey)) {
+                log.warn(
+                        "event=ticket_dynamic_action_skipped ticketId={} transitionId={} actionKey={} currentStatusId={} reason=duplicate_transition_key",
+                        ticket.getId(),
+                        candidate.getId(),
+                        candidate.getActionKey(),
+                        currentStatusId
+                );
                 continue;
             }
             try {
@@ -459,6 +499,29 @@ public class TicketService {
             }
         }
         return dynamicActions;
+    }
+
+    private boolean isExactCurrentStatusTransition(WorkflowTransition transition, Long currentStatusId) {
+        Long fromStatusId = transition == null ? null : resolveStatusRecordId(transition.getFromStatusRecord());
+        return currentStatusId != null && currentStatusId.equals(fromStatusId);
+    }
+
+    private boolean isLegacySystemOnlyDynamicTransition(WorkflowTransition transition) {
+        return isProtectedSystemStatus(transition.getFromStatusRecord())
+                && isProtectedSystemStatus(transition.getToStatusRecord());
+    }
+
+    private boolean isProtectedSystemStatus(WorkflowStatus status) {
+        return status != null && status.isSystemStatus() && status.isProtectedStatus();
+    }
+
+    private String dynamicTransitionKey(WorkflowTransition transition) {
+        return String.join(
+                "|",
+                transition.getActionKey() == null ? "" : transition.getActionKey(),
+                String.valueOf(resolveStatusRecordId(transition.getFromStatusRecord())),
+                String.valueOf(resolveStatusRecordId(transition.getToStatusRecord()))
+        );
     }
 
     private boolean isProtectedFixedAction(String actionKey) {
