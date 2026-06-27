@@ -5,11 +5,14 @@ import com.ke.ticketsystemke.dto.GenericTransitionPreviewRequest;
 import com.ke.ticketsystemke.dto.GenericTransitionPreviewResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WorkflowAction;
+import com.ke.ticketsystemke.entity.WorkflowMode;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.entity.WorkflowTransition;
+import com.ke.ticketsystemke.repository.TicketCategoryRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.WorkflowActionRepository;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
@@ -31,6 +34,7 @@ public class GenericTransitionExecutorService {
     );
 
     private final TicketRepository ticketRepository;
+    private final TicketCategoryRepository ticketCategoryRepository;
     private final WorkflowTransitionRepository workflowTransitionRepository;
     private final WorkflowActionRepository workflowActionRepository;
     private final WorkflowStatusRepository workflowStatusRepository;
@@ -44,6 +48,7 @@ public class GenericTransitionExecutorService {
 
     public GenericTransitionExecutorService(
             TicketRepository ticketRepository,
+            TicketCategoryRepository ticketCategoryRepository,
             WorkflowTransitionRepository workflowTransitionRepository,
             WorkflowActionRepository workflowActionRepository,
             WorkflowStatusRepository workflowStatusRepository,
@@ -56,6 +61,7 @@ public class GenericTransitionExecutorService {
             RepairWorkflowFeatureFlag repairWorkflowFeatureFlag
     ) {
         this.ticketRepository = ticketRepository;
+        this.ticketCategoryRepository = ticketCategoryRepository;
         this.workflowTransitionRepository = workflowTransitionRepository;
         this.workflowActionRepository = workflowActionRepository;
         this.workflowStatusRepository = workflowStatusRepository;
@@ -112,6 +118,25 @@ public class GenericTransitionExecutorService {
             GenericTransitionExecutionRequest request
     ) {
         GenericTransitionExecutionPlan plan = prepareExecution(ticketId, workflowTransitionId, employeeId);
+        return executePreparedTransition(plan, employeeId, request);
+    }
+
+    @Transactional
+    public TicketResponse executeActionTransition(
+            Long ticketId,
+            String actionKey,
+            String employeeId,
+            GenericTransitionExecutionRequest request
+    ) {
+        GenericTransitionExecutionPlan plan = prepareActionExecution(ticketId, actionKey, employeeId);
+        return executePreparedTransition(plan, employeeId, request);
+    }
+
+    private TicketResponse executePreparedTransition(
+            GenericTransitionExecutionPlan plan,
+            String employeeId,
+            GenericTransitionExecutionRequest request
+    ) {
         Ticket ticket = plan.ticket();
         WorkflowTransition transition = plan.transition();
         TicketStatus fromStatus = ticket.getStatus();
@@ -141,6 +166,48 @@ public class GenericTransitionExecutorService {
                 ticketChargeService.calculateTotalCharge(saved.getId()),
                 effectiveStatusResolver.resolve(saved)
         );
+    }
+
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
+    public GenericTransitionExecutionPlan prepareActionExecution(
+            Long ticketId,
+            String rawActionKey,
+            String employeeId
+    ) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        TicketCategoryConfig category = resolveCategory(ticket);
+        if (category == null
+                || category.getWorkflowMode() != WorkflowMode.DB_CONFIGURED
+                || !category.isDbWorkflowEnabled()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "DB workflow is not enabled for this ticket category");
+        }
+
+        ResolvedTicketStatus currentStatus = effectiveStatusResolver.resolve(ticket);
+        Long currentStatusId = currentStatus.actualStatusId();
+        if (currentStatusId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket exact workflow status is unavailable");
+        }
+
+        String actionKey = normalizeActionKey(rawActionKey);
+        workflowActionRepository.findByActionKey(actionKey)
+                .filter(WorkflowAction::isActive)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active workflow action not found"));
+
+        java.util.List<WorkflowTransition> matches = workflowTransitionRepository
+                .findByActionKeyAndFromStatusRecord_IdAndActiveTrueOrderByIdAsc(actionKey, currentStatusId)
+                .stream()
+                .filter(transition -> workflowTransitionCategoryScopeValidator.isAllowed(transition, ticket))
+                .toList();
+
+        if (matches.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow transition is not available");
+        }
+        if (matches.size() > 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ambiguous workflow transition configuration");
+        }
+
+        return prepareExecution(ticketId, matches.get(0).getId(), employeeId);
     }
 
     @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
@@ -182,6 +249,27 @@ public class GenericTransitionExecutorService {
                 transition.isSystemTransition(),
                 !transition.isSystemTransition() || isCustomTargetStatus(toStatus)
         );
+    }
+
+    private TicketCategoryConfig resolveCategory(Ticket ticket) {
+        if (ticket == null) {
+            return null;
+        }
+        TicketCategoryConfig category = ticket.getCategoryRecord();
+        if (category == null && ticket.getCategory() != null) {
+            category = ticketCategoryRepository.findByCategoryKey(ticket.getCategory().name()).orElse(null);
+        }
+        return category;
+    }
+
+    private String normalizeActionKey(String rawActionKey) {
+        String actionKey = rawActionKey == null
+                ? ""
+                : rawActionKey.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!actionKey.matches("^[A-Z0-9_]{2,60}$")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid workflow action key");
+        }
+        return actionKey;
     }
 
     private WorkflowStatus resolveWorkflowStatus(WorkflowStatus statusRecord, TicketStatus fallbackStatus) {

@@ -195,6 +195,26 @@ public class TicketController {
         return response;
     }
 
+    @PostMapping("/{id}/workflow-actions/{actionKey}/execute")
+    public TicketResponse executeWorkflowAction(
+            @PathVariable Long id,
+            @PathVariable String actionKey,
+            @Valid @RequestBody(required = false) GenericTransitionExecutionRequest request,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
+        log.info("event=ticket_workflow_action_execute_requested employeeId={} ticketId={} actionKey={}",
+                employeeId, id, actionKey);
+        GenericTransitionExecutionRequest safeRequest = request == null
+                ? new GenericTransitionExecutionRequest()
+                : request;
+        TicketResponse response = genericTransitionExecutorService.executeActionTransition(id, actionKey, employeeId, safeRequest);
+        log.info("event=ticket_workflow_action_executed employeeId={} ticketId={} actionKey={} ticketNumber={}",
+                employeeId, response.id(), actionKey, response.ticketNumber());
+        return response;
+    }
+
     @GetMapping("/search")
     public List<TicketResponse> searchTickets(
             @RequestParam(required = false) String query,

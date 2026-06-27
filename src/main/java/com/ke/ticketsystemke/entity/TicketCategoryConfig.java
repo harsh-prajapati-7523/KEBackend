@@ -2,9 +2,14 @@ package com.ke.ticketsystemke.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -33,6 +38,23 @@ public class TicketCategoryConfig {
 
     @Column(name = "sort_order")
     private Integer sortOrder;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "workflow_mode", nullable = false, length = 30)
+    private WorkflowMode workflowMode = WorkflowMode.LEGACY_FIXED;
+
+    @Column(name = "fixed_actions_enabled", nullable = false)
+    private boolean fixedActionsEnabled = true;
+
+    @Column(name = "db_workflow_enabled", nullable = false)
+    private boolean dbWorkflowEnabled = false;
+
+    @Column(name = "workflow_mode_updated_at")
+    private Instant workflowModeUpdatedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "workflow_mode_updated_by_employee_id")
+    private Employee workflowModeUpdatedByEmployee;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -87,6 +109,46 @@ public class TicketCategoryConfig {
         this.sortOrder = sortOrder;
     }
 
+    public WorkflowMode getWorkflowMode() {
+        return workflowMode;
+    }
+
+    public void setWorkflowMode(WorkflowMode workflowMode) {
+        this.workflowMode = workflowMode == null ? WorkflowMode.LEGACY_FIXED : workflowMode;
+    }
+
+    public boolean isFixedActionsEnabled() {
+        return fixedActionsEnabled;
+    }
+
+    public void setFixedActionsEnabled(boolean fixedActionsEnabled) {
+        this.fixedActionsEnabled = fixedActionsEnabled;
+    }
+
+    public boolean isDbWorkflowEnabled() {
+        return dbWorkflowEnabled;
+    }
+
+    public void setDbWorkflowEnabled(boolean dbWorkflowEnabled) {
+        this.dbWorkflowEnabled = dbWorkflowEnabled;
+    }
+
+    public Instant getWorkflowModeUpdatedAt() {
+        return workflowModeUpdatedAt;
+    }
+
+    public void setWorkflowModeUpdatedAt(Instant workflowModeUpdatedAt) {
+        this.workflowModeUpdatedAt = workflowModeUpdatedAt;
+    }
+
+    public Employee getWorkflowModeUpdatedByEmployee() {
+        return workflowModeUpdatedByEmployee;
+    }
+
+    public void setWorkflowModeUpdatedByEmployee(Employee workflowModeUpdatedByEmployee) {
+        this.workflowModeUpdatedByEmployee = workflowModeUpdatedByEmployee;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -98,6 +160,9 @@ public class TicketCategoryConfig {
     @PrePersist
     void setCreationTimestamp() {
         Instant now = Instant.now();
+        if (workflowMode == null) {
+            workflowMode = WorkflowMode.LEGACY_FIXED;
+        }
         if (createdAt == null) {
             createdAt = now;
         }
@@ -108,6 +173,9 @@ public class TicketCategoryConfig {
 
     @PreUpdate
     void setUpdateTimestamp() {
+        if (workflowMode == null) {
+            workflowMode = WorkflowMode.LEGACY_FIXED;
+        }
         updatedAt = Instant.now();
     }
 }

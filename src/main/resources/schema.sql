@@ -715,6 +715,59 @@ ALTER TABLE ticket_categories
 ALTER TABLE ticket_categories
     ALTER COLUMN updated_at SET DEFAULT now();
 
+ALTER TABLE ticket_categories
+    ADD COLUMN IF NOT EXISTS workflow_mode VARCHAR(30) NOT NULL DEFAULT 'LEGACY_FIXED';
+
+ALTER TABLE ticket_categories
+    ADD COLUMN IF NOT EXISTS fixed_actions_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE ticket_categories
+    ADD COLUMN IF NOT EXISTS db_workflow_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE ticket_categories
+    ADD COLUMN IF NOT EXISTS workflow_mode_updated_at TIMESTAMP;
+
+ALTER TABLE ticket_categories
+    ADD COLUMN IF NOT EXISTS workflow_mode_updated_by_employee_id BIGINT;
+
+ALTER TABLE ticket_categories
+    DROP CONSTRAINT IF EXISTS ck_ticket_categories_workflow_mode;
+
+ALTER TABLE ticket_categories
+    ADD CONSTRAINT ck_ticket_categories_workflow_mode
+    CHECK (workflow_mode IN ('LEGACY_FIXED', 'DB_CONFIGURED'));
+
+ALTER TABLE ticket_categories
+    DROP CONSTRAINT IF EXISTS fk_ticket_categories_workflow_mode_updated_by_employee;
+
+ALTER TABLE ticket_categories
+    ADD CONSTRAINT fk_ticket_categories_workflow_mode_updated_by_employee FOREIGN KEY (workflow_mode_updated_by_employee_id)
+    REFERENCES employees(id);
+
+UPDATE ticket_categories
+SET
+    workflow_mode = COALESCE(workflow_mode, 'LEGACY_FIXED'),
+    fixed_actions_enabled = COALESCE(fixed_actions_enabled, TRUE),
+    db_workflow_enabled = COALESCE(db_workflow_enabled, FALSE);
+
+ALTER TABLE ticket_categories
+    ALTER COLUMN workflow_mode SET DEFAULT 'LEGACY_FIXED';
+
+ALTER TABLE ticket_categories
+    ALTER COLUMN workflow_mode SET NOT NULL;
+
+ALTER TABLE ticket_categories
+    ALTER COLUMN fixed_actions_enabled SET DEFAULT TRUE;
+
+ALTER TABLE ticket_categories
+    ALTER COLUMN fixed_actions_enabled SET NOT NULL;
+
+ALTER TABLE ticket_categories
+    ALTER COLUMN db_workflow_enabled SET DEFAULT FALSE;
+
+ALTER TABLE ticket_categories
+    ALTER COLUMN db_workflow_enabled SET NOT NULL;
+
 UPDATE ticket_categories
 SET created_at = now()
 WHERE created_at IS NULL;

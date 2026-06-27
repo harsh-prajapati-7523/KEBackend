@@ -81,6 +81,7 @@ public class SecurityConfig {
                                 "/volt/workflow/transitions",
                                 "/volt/workflow/transitions/**",
                                 "/volt/workflow/transition-options",
+                                "/volt/workflow/validate-category-workflow",
                                 "/volt/workflow/actions",
                                 "/volt/workflow/statuses",
                                 "/volt/workflow/statuses/**")
@@ -176,6 +177,11 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/volt/tickets/*/workflow-transitions/*/execute")
+                        .authenticated()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/volt/tickets/*/workflow-actions/*/execute")
                         .authenticated()
 
                         .requestMatchers(

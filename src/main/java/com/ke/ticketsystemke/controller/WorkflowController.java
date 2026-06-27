@@ -1,10 +1,19 @@
 package com.ke.ticketsystemke.controller;
 
 import com.ke.ticketsystemke.dto.CreateWorkflowTransitionRequest;
+import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionCategoryRuleRequest;
+import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionRoleRuleRequest;
 import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionRequest;
+import com.ke.ticketsystemke.dto.UpsertWorkflowTransitionCategoryRuleRequest;
+import com.ke.ticketsystemke.dto.UpsertWorkflowTransitionRoleRuleRequest;
+import com.ke.ticketsystemke.dto.ValidateCategoryWorkflowRequest;
+import com.ke.ticketsystemke.dto.WorkflowValidationResponse;
+import com.ke.ticketsystemke.dto.WorkflowTransitionCategoryRuleResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionOptionsResponse;
+import com.ke.ticketsystemke.dto.WorkflowTransitionRoleRuleResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionResponse;
 import com.ke.ticketsystemke.service.WorkflowService;
+import com.ke.ticketsystemke.service.WorkflowValidationService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,9 +33,14 @@ import java.util.List;
 public class WorkflowController {
 
     private final WorkflowService workflowService;
+    private final WorkflowValidationService workflowValidationService;
 
-    public WorkflowController(WorkflowService workflowService) {
+    public WorkflowController(
+            WorkflowService workflowService,
+            WorkflowValidationService workflowValidationService
+    ) {
         this.workflowService = workflowService;
+        this.workflowValidationService = workflowValidationService;
     }
 
     @GetMapping("/transitions")
@@ -55,5 +69,62 @@ public class WorkflowController {
             Authentication authentication
     ) {
         return workflowService.updateTransition(id, request, authentication.getName());
+    }
+
+    @GetMapping("/transitions/{transitionId}/category-rules")
+    public List<WorkflowTransitionCategoryRuleResponse> listCategoryRules(@PathVariable Long transitionId) {
+        return workflowService.listCategoryRules(transitionId);
+    }
+
+    @PostMapping("/transitions/{transitionId}/category-rules")
+    public ResponseEntity<WorkflowTransitionCategoryRuleResponse> createCategoryRule(
+            @PathVariable Long transitionId,
+            @Valid @RequestBody UpsertWorkflowTransitionCategoryRuleRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(workflowService.createCategoryRule(transitionId, request, authentication.getName()));
+    }
+
+    @PatchMapping("/transitions/{transitionId}/category-rules/{ruleId}")
+    public WorkflowTransitionCategoryRuleResponse updateCategoryRule(
+            @PathVariable Long transitionId,
+            @PathVariable Long ruleId,
+            @Valid @RequestBody UpdateWorkflowTransitionCategoryRuleRequest request,
+            Authentication authentication
+    ) {
+        return workflowService.updateCategoryRule(transitionId, ruleId, request, authentication.getName());
+    }
+
+    @GetMapping("/transitions/{transitionId}/role-rules")
+    public List<WorkflowTransitionRoleRuleResponse> listRoleRules(@PathVariable Long transitionId) {
+        return workflowService.listRoleRules(transitionId);
+    }
+
+    @PostMapping("/transitions/{transitionId}/role-rules")
+    public ResponseEntity<WorkflowTransitionRoleRuleResponse> createRoleRule(
+            @PathVariable Long transitionId,
+            @Valid @RequestBody UpsertWorkflowTransitionRoleRuleRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(workflowService.createRoleRule(transitionId, request, authentication.getName()));
+    }
+
+    @PatchMapping("/transitions/{transitionId}/role-rules/{ruleId}")
+    public WorkflowTransitionRoleRuleResponse updateRoleRule(
+            @PathVariable Long transitionId,
+            @PathVariable Long ruleId,
+            @Valid @RequestBody UpdateWorkflowTransitionRoleRuleRequest request,
+            Authentication authentication
+    ) {
+        return workflowService.updateRoleRule(transitionId, ruleId, request, authentication.getName());
+    }
+
+    @PostMapping("/validate-category-workflow")
+    public WorkflowValidationResponse validateCategoryWorkflow(
+            @Valid @RequestBody ValidateCategoryWorkflowRequest request
+    ) {
+        return workflowValidationService.validateCategoryWorkflow(request.getCategoryId());
     }
 }

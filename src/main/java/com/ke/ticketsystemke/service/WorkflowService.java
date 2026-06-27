@@ -1,19 +1,33 @@
 package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.CreateWorkflowTransitionRequest;
+import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionCategoryRuleRequest;
+import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionRoleRuleRequest;
 import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionRequest;
+import com.ke.ticketsystemke.dto.UpsertWorkflowTransitionCategoryRuleRequest;
+import com.ke.ticketsystemke.dto.UpsertWorkflowTransitionRoleRuleRequest;
+import com.ke.ticketsystemke.dto.WorkflowTransitionCategoryRuleResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionOptionResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionOptionsResponse;
+import com.ke.ticketsystemke.dto.WorkflowTransitionRoleRuleResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionResponse;
 import com.ke.ticketsystemke.config.CacheNames;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Employee;
+import com.ke.ticketsystemke.entity.Role;
+import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WorkflowTransition;
+import com.ke.ticketsystemke.entity.WorkflowTransitionCategoryRule;
+import com.ke.ticketsystemke.entity.WorkflowTransitionRoleRule;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
+import com.ke.ticketsystemke.repository.RoleRepository;
+import com.ke.ticketsystemke.repository.TicketCategoryRepository;
 import com.ke.ticketsystemke.repository.WorkflowActionRepository;
+import com.ke.ticketsystemke.repository.WorkflowTransitionCategoryRuleRepository;
 import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
+import com.ke.ticketsystemke.repository.WorkflowTransitionRoleRuleRepository;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -54,17 +68,29 @@ public class WorkflowService {
     private final EmployeeRepository employeeRepository;
     private final WorkflowStatusRepository workflowStatusRepository;
     private final WorkflowActionRepository workflowActionRepository;
+    private final WorkflowTransitionCategoryRuleRepository workflowTransitionCategoryRuleRepository;
+    private final WorkflowTransitionRoleRuleRepository workflowTransitionRoleRuleRepository;
+    private final TicketCategoryRepository ticketCategoryRepository;
+    private final RoleRepository roleRepository;
 
     public WorkflowService(
             WorkflowTransitionRepository workflowTransitionRepository,
             EmployeeRepository employeeRepository,
             WorkflowStatusRepository workflowStatusRepository,
-            WorkflowActionRepository workflowActionRepository
+            WorkflowActionRepository workflowActionRepository,
+            WorkflowTransitionCategoryRuleRepository workflowTransitionCategoryRuleRepository,
+            WorkflowTransitionRoleRuleRepository workflowTransitionRoleRuleRepository,
+            TicketCategoryRepository ticketCategoryRepository,
+            RoleRepository roleRepository
     ) {
         this.workflowTransitionRepository = workflowTransitionRepository;
         this.employeeRepository = employeeRepository;
         this.workflowStatusRepository = workflowStatusRepository;
         this.workflowActionRepository = workflowActionRepository;
+        this.workflowTransitionCategoryRuleRepository = workflowTransitionCategoryRuleRepository;
+        this.workflowTransitionRoleRuleRepository = workflowTransitionRoleRuleRepository;
+        this.ticketCategoryRepository = ticketCategoryRepository;
+        this.roleRepository = roleRepository;
     }
 
     @Transactional(readOnly = true)
@@ -119,6 +145,222 @@ public class WorkflowService {
 
         log.info("event=workflow_transition_options_returned employeeId={} optionCount={}", employeeId, options.size());
         return new WorkflowTransitionOptionsResponse(options);
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkflowTransitionCategoryRuleResponse> listCategoryRules(Long transitionId) {
+        requireTransition(transitionId);
+        return workflowTransitionCategoryRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(transitionId)
+                .stream()
+                .map(WorkflowTransitionCategoryRuleResponse::from)
+                .toList();
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
+    public WorkflowTransitionCategoryRuleResponse createCategoryRule(
+            Long transitionId,
+            UpsertWorkflowTransitionCategoryRuleRequest request,
+            String employeeId
+    ) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category rule request is required");
+        }
+        WorkflowTransition transition = requireTransition(transitionId);
+        TicketCategoryConfig category = ticketCategoryRepository.findById(request.getCategoryId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category not found"));
+        if (workflowTransitionCategoryRuleRepository
+                .findByWorkflowTransition_IdAndCategory_Id(transitionId, category.getId())
+                .isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Workflow transition category rule already exists");
+        }
+
+        WorkflowTransitionCategoryRule rule = new WorkflowTransitionCategoryRule();
+        rule.setWorkflowTransition(transition);
+        rule.setCategory(category);
+        rule.setActive(request.getActive() == null || request.getActive());
+        Employee employee = resolveEmployee(employeeId);
+        rule.setCreatedByEmployee(employee);
+        rule.setUpdatedByEmployee(employee);
+
+        WorkflowTransitionCategoryRule saved = workflowTransitionCategoryRuleRepository.save(rule);
+        if (saved.isActive()) {
+            validateNoAmbiguousActiveTransitionsForCategory(transition, category.getId());
+        }
+        return WorkflowTransitionCategoryRuleResponse.from(saved);
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
+    public WorkflowTransitionCategoryRuleResponse updateCategoryRule(
+            Long transitionId,
+            Long ruleId,
+            UpdateWorkflowTransitionCategoryRuleRequest request,
+            String employeeId
+    ) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category rule request is required");
+        }
+        WorkflowTransitionCategoryRule rule = workflowTransitionCategoryRuleRepository
+                .findByIdAndWorkflowTransition_Id(ruleId, transitionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow transition category rule not found"));
+        rule.setActive(Boolean.TRUE.equals(request.getActive()));
+        rule.setUpdatedByEmployee(resolveEmployee(employeeId));
+        WorkflowTransitionCategoryRule saved = workflowTransitionCategoryRuleRepository.save(rule);
+        if (saved.isActive()) {
+            validateNoAmbiguousActiveTransitionsForCategory(saved.getWorkflowTransition(), saved.getCategory().getId());
+        }
+        return WorkflowTransitionCategoryRuleResponse.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkflowTransitionRoleRuleResponse> listRoleRules(Long transitionId) {
+        requireTransition(transitionId);
+        return workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(transitionId)
+                .stream()
+                .map(WorkflowTransitionRoleRuleResponse::from)
+                .toList();
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
+    public WorkflowTransitionRoleRuleResponse createRoleRule(
+            Long transitionId,
+            UpsertWorkflowTransitionRoleRuleRequest request,
+            String employeeId
+    ) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role rule request is required");
+        }
+        WorkflowTransition transition = requireTransition(transitionId);
+        Role role = roleRepository.findById(request.getRoleId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role not found"));
+        if (workflowTransitionRoleRuleRepository
+                .findByWorkflowTransition_IdAndRole_Id(transitionId, role.getId())
+                .isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Workflow transition role rule already exists");
+        }
+
+        WorkflowTransitionRoleRule rule = new WorkflowTransitionRoleRule();
+        rule.setWorkflowTransition(transition);
+        rule.setRole(role);
+        rule.setActive(request.getActive() == null || request.getActive());
+        Employee employee = resolveEmployee(employeeId);
+        rule.setCreatedByEmployee(employee);
+        rule.setUpdatedByEmployee(employee);
+        WorkflowTransitionRoleRule saved = workflowTransitionRoleRuleRepository.save(rule);
+        if (saved.isActive()) {
+            validateNoAmbiguousActiveTransitionsForConfiguredCategories(transition);
+        }
+        return WorkflowTransitionRoleRuleResponse.from(saved);
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = {
+            CacheNames.WORKFLOW_TRANSITIONS,
+            CacheNames.WORKFLOW_TRANSITION_OPTIONS
+    }, allEntries = true)
+    public WorkflowTransitionRoleRuleResponse updateRoleRule(
+            Long transitionId,
+            Long ruleId,
+            UpdateWorkflowTransitionRoleRuleRequest request,
+            String employeeId
+    ) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role rule request is required");
+        }
+        WorkflowTransitionRoleRule rule = workflowTransitionRoleRuleRepository
+                .findByIdAndWorkflowTransition_Id(ruleId, transitionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow transition role rule not found"));
+        rule.setActive(Boolean.TRUE.equals(request.getActive()));
+        rule.setUpdatedByEmployee(resolveEmployee(employeeId));
+        WorkflowTransitionRoleRule saved = workflowTransitionRoleRuleRepository.save(rule);
+        if (saved.isActive()) {
+            validateNoAmbiguousActiveTransitionsForConfiguredCategories(saved.getWorkflowTransition());
+        }
+        return WorkflowTransitionRoleRuleResponse.from(saved);
+    }
+
+    public void validateNoAmbiguousActiveTransitionsForCategory(
+            WorkflowTransition transition,
+            Long categoryId
+    ) {
+        if (transition == null
+                || transition.getId() == null
+                || categoryId == null
+                || !transition.isActive()
+                || transition.getFromStatusRecord() == null
+                || transition.getFromStatusRecord().getId() == null
+                || !isActionActive(transition.getActionKey())) {
+            return;
+        }
+
+        List<WorkflowTransition> matchingTransitions = workflowTransitionRepository
+                .findByActionKeyAndFromStatusRecord_IdAndActiveTrueOrderByIdAsc(
+                        transition.getActionKey(),
+                        transition.getFromStatusRecord().getId()
+                )
+                .stream()
+                .filter(candidate -> isActionActive(candidate.getActionKey()))
+                .filter(candidate -> isCategoryAllowed(candidate, categoryId))
+                .toList();
+
+        if (matchingTransitions.size() > 1) {
+            String ids = matchingTransitions.stream()
+                    .map(candidate -> String.valueOf(candidate.getId()))
+                    .reduce((first, second) -> first + "," + second)
+                    .orElse("");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ambiguous workflow transitions for category/action/status: " + ids
+            );
+        }
+    }
+
+    public boolean isCategoryAllowed(WorkflowTransition transition, Long categoryId) {
+        if (transition == null || transition.getId() == null || categoryId == null) {
+            return false;
+        }
+        Long transitionId = transition.getId();
+        if (!workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(transitionId)) {
+            return true;
+        }
+        return workflowTransitionCategoryRuleRepository
+                .existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(transitionId, categoryId);
+    }
+
+    private void validateNoAmbiguousActiveTransitionsForConfiguredCategories(WorkflowTransition transition) {
+        for (TicketCategoryConfig category : ticketCategoryRepository.findAll()) {
+            if (category.isActive() && isCategoryAllowed(transition, category.getId())) {
+                validateNoAmbiguousActiveTransitionsForCategory(transition, category.getId());
+            }
+        }
+    }
+
+    private boolean isActionActive(String actionKey) {
+        return workflowActionRepository.findByActionKey(actionKey)
+                .map(action -> action.isActive())
+                .orElse(false);
+    }
+
+    private WorkflowTransition requireTransition(Long transitionId) {
+        return workflowTransitionRepository.findById(transitionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow transition not found"));
+    }
+
+    private Employee resolveEmployee(String employeeId) {
+        String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
+        return employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
     }
 
     @Transactional
