@@ -123,11 +123,10 @@ public class RepairWorkflowConfigurationInitializer implements ApplicationRunner
         if (repairWorkflowFeatureFlag.isEnabled()) {
             ensureSuperAdminGrants(actionsByKey);
         }
-        ensureTransitions(statusesByKey, actionsByKey);
         if (!repairWorkflowFeatureFlag.isEnabled()) {
             deactivateRepairWorkflowTransitions();
         }
-        log.info("event=repair_workflow_configuration_ensured statusCount={} actionCount={} transitionCount={}",
+        log.info("event=repair_workflow_configuration_ensured statusCount={} actionCount={} transitionSeedCount={} transitionsSeeded=false",
                 STATUS_SEEDS.size(), ACTION_SEEDS.size(), TRANSITION_SEEDS.size());
     }
 
@@ -248,49 +247,6 @@ public class RepairWorkflowConfigurationInitializer implements ApplicationRunner
                 rule.setAllowed(true);
                 roleAccessRuleRepository.save(rule);
             }
-        }
-    }
-
-    private void ensureTransitions(
-            Map<String, WorkflowStatus> statusesByKey,
-            Map<String, WorkflowAction> actionsByKey
-    ) {
-        for (TransitionSeed seed : TRANSITION_SEEDS) {
-            WorkflowAction action = actionsByKey.get(seed.actionKey());
-            WorkflowStatus fromStatus = statusesByKey.get(seed.fromStatusKey());
-            WorkflowStatus toStatus = statusesByKey.get(seed.toStatusKey());
-            if (action == null || fromStatus == null || toStatus == null) {
-                throw new IllegalStateException("Repair workflow transition seed is missing metadata: " + seed);
-            }
-
-            List<WorkflowTransition> existingTransitions = workflowTransitionRepository
-                    .findAllByActionKeyAndFromStatusRecord_IdAndToStatusRecord_IdOrderByIdAsc(
-                    seed.actionKey(),
-                    fromStatus.getId(),
-                    toStatus.getId()
-            );
-            if (!existingTransitions.isEmpty()) {
-                WorkflowTransition transition = existingTransitions.get(0);
-                boolean expectedActive = repairWorkflowFeatureFlag.isEnabled();
-                if (transition.isActive() != expectedActive) {
-                    transition.setActive(expectedActive);
-                    workflowTransitionRepository.save(transition);
-                }
-                continue;
-            }
-
-            WorkflowTransition transition = new WorkflowTransition();
-            transition.setActionKey(seed.actionKey());
-            transition.setDisplayName(seed.displayName());
-            transition.setFromStatus(fromStatus.getBehaviorBucket());
-            transition.setToStatus(toStatus.getBehaviorBucket());
-            transition.setFromStatusRecord(fromStatus);
-            transition.setToStatusRecord(toStatus);
-            transition.setActive(repairWorkflowFeatureFlag.isEnabled());
-            transition.setSortOrder(seed.sortOrder());
-            transition.setSystemTransition(false);
-            transition.setProtectedTransition(false);
-            workflowTransitionRepository.save(transition);
         }
     }
 
