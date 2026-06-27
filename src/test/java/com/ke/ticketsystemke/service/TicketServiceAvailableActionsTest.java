@@ -3,7 +3,12 @@ package com.ke.ticketsystemke.service;
 import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Ticket;
+import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.entity.TicketStatus;
+import com.ke.ticketsystemke.entity.WorkflowAction;
+import com.ke.ticketsystemke.entity.WorkflowMode;
+import com.ke.ticketsystemke.entity.WorkflowStatus;
+import com.ke.ticketsystemke.entity.WorkflowTransition;
 import com.ke.ticketsystemke.repository.CategoryFieldConfigRepository;
 import com.ke.ticketsystemke.repository.DropdownOptionRepository;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
@@ -16,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -124,11 +130,103 @@ class TicketServiceAvailableActionsTest {
         assertThat(response.actions().get(AccessKey.CANCEL_TICKET).available()).isTrue();
     }
 
+    @Test
+    void dbConfiguredCategoryShowsCustomActionBetweenProtectedSystemStatuses() {
+        WorkflowStatus newStatus = systemStatus(1L, "NEW", TicketStatus.NEW, false);
+        WorkflowStatus inProgressStatus = systemStatus(3L, "IN_PROGRESS", TicketStatus.IN_PROGRESS, false);
+        TicketCategoryConfig category = new TicketCategoryConfig();
+        ReflectionTestUtils.setField(category, "id", 5L);
+        category.setCategoryKey("REPAIR_WORKFLOW_TEST");
+        category.setWorkflowMode(WorkflowMode.DB_CONFIGURED);
+        category.setDbWorkflowEnabled(true);
+        category.setFixedActionsEnabled(false);
+
+        Ticket ticket = new Ticket();
+        ticket.setId(20L);
+        ticket.setStatus(TicketStatus.NEW);
+        ticket.setStatusRecord(newStatus);
+        ticket.setCategoryRecord(category);
+
+        WorkflowTransition transition = new WorkflowTransition();
+        ReflectionTestUtils.setField(transition, "id", 8L);
+        transition.setActionKey("START_REPAIR_WORK");
+        transition.setDisplayName("Start Work");
+        transition.setFromStatus(TicketStatus.NEW);
+        transition.setToStatus(TicketStatus.IN_PROGRESS);
+        transition.setFromStatusRecord(newStatus);
+        transition.setToStatusRecord(inProgressStatus);
+        transition.setActive(true);
+        transition.setSystemTransition(false);
+        transition.setProtectedTransition(false);
+
+        WorkflowAction action = new WorkflowAction();
+        action.setActionKey("START_REPAIR_WORK");
+        action.setDisplayName("Start Work");
+        action.setActive(true);
+        action.setSystemAction(false);
+        action.setProtectedAction(false);
+
+        ResolvedTicketStatus currentStatus = new ResolvedTicketStatus(
+                TicketStatus.NEW,
+                1L,
+                "NEW",
+                "New",
+                true,
+                false,
+                TicketStatus.NEW,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                ResolvedTicketStatus.WarningCode.NONE
+        );
+
+        when(ticketRepository.findById(20L)).thenReturn(Optional.of(ticket));
+        when(workflowTransitionRepository.findByFromStatusRecord_IdAndActiveTrueOrderBySortOrderAscIdAsc(1L))
+                .thenReturn(List.of(transition));
+        when(repairWorkflowFeatureFlag.isEnabled()).thenReturn(true);
+        when(genericTransitionExecutorService.prepareExecution(20L, 8L, "admin-1"))
+                .thenReturn(new GenericTransitionExecutorService.GenericTransitionExecutionPlan(
+                        ticket,
+                        transition,
+                        action,
+                        newStatus,
+                        inProgressStatus,
+                        TicketStatus.IN_PROGRESS,
+                        currentStatus,
+                        "admin-1",
+                        false,
+                        true
+                ));
+
+        TicketAvailableActionsResponse response = ticketService.getAvailableActions(20L, "admin-1", "SUPER_ADMIN");
+
+        assertThat(response.actions().get(AccessKey.PICK_TICKET).available()).isFalse();
+        assertThat(response.dynamicActions())
+                .extracting(actionResponse -> actionResponse.actionKey())
+                .containsExactly("START_REPAIR_WORK");
+    }
+
     private Ticket inProgressTicket(String pickedByEmployeeId) {
         Ticket ticket = new Ticket();
         ticket.setId(10L);
         ticket.setStatus(TicketStatus.IN_PROGRESS);
         ticket.setPickedByEmployeeId(pickedByEmployeeId);
         return ticket;
+    }
+
+    private WorkflowStatus systemStatus(Long id, String statusKey, TicketStatus behaviorBucket, boolean terminal) {
+        WorkflowStatus status = new WorkflowStatus();
+        ReflectionTestUtils.setField(status, "id", id);
+        status.setStatusKey(statusKey);
+        status.setDisplayName(statusKey);
+        status.setActive(true);
+        status.setSystemStatus(true);
+        status.setProtectedStatus(true);
+        status.setBehaviorBucket(behaviorBucket);
+        status.setTerminal(terminal);
+        return status;
     }
 }

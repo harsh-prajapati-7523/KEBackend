@@ -558,7 +558,8 @@ public class TicketService {
     }
 
     private boolean isLegacySystemOnlyDynamicTransition(WorkflowTransition transition) {
-        return isProtectedSystemStatus(transition.getFromStatusRecord())
+        return isProtectedFixedAction(transition == null ? null : transition.getActionKey())
+                && isProtectedSystemStatus(transition.getFromStatusRecord())
                 && isProtectedSystemStatus(transition.getToStatusRecord());
     }
 
