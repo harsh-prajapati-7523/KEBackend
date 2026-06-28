@@ -3,6 +3,7 @@ package com.ke.ticketsystemke.dto;
 import com.ke.ticketsystemke.entity.TicketWorkflowHistory;
 import com.ke.ticketsystemke.entity.WorkflowAction;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
+import com.ke.ticketsystemke.entity.WorkflowTransition;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -17,6 +18,10 @@ public record TicketWorkflowHistoryResponse(
         String toStatus,
         String fromStatusDisplayName,
         String toStatusDisplayName,
+        String fromStatusKey,
+        String toStatusKey,
+        String fromBehaviorBucket,
+        String toBehaviorBucket,
         String executedByEmployeeId,
         String executedByEmployeeNameSnapshot,
         String previousOwnerEmployeeId,
@@ -30,6 +35,9 @@ public record TicketWorkflowHistoryResponse(
 ) {
 
     public static TicketWorkflowHistoryResponse from(TicketWorkflowHistory history) {
+        WorkflowStatus fromStatusRecord = resolveEffectiveFromStatusRecord(history);
+        WorkflowStatus toStatusRecord = resolveEffectiveToStatusRecord(history);
+
         return new TicketWorkflowHistoryResponse(
                 history.getId(),
                 history.getTicketId(),
@@ -38,8 +46,12 @@ public record TicketWorkflowHistoryResponse(
                 resolveActionDisplayName(history),
                 history.getFromStatus(),
                 history.getToStatus(),
-                resolveStatusDisplayName(history.getFromStatusRecord(), history.getFromStatus()),
-                resolveStatusDisplayName(history.getToStatusRecord(), history.getToStatus()),
+                resolveStatusDisplayName(fromStatusRecord, history.getFromStatus()),
+                resolveStatusDisplayName(toStatusRecord, history.getToStatus()),
+                resolveStatusKey(fromStatusRecord, history.getFromStatus()),
+                resolveStatusKey(toStatusRecord, history.getToStatus()),
+                resolveBehaviorBucket(fromStatusRecord, history.getFromStatus()),
+                resolveBehaviorBucket(toStatusRecord, history.getToStatus()),
                 history.getExecutedByEmployeeId(),
                 history.getExecutedByEmployeeNameSnapshot(),
                 history.getPreviousOwnerEmployeeId(),
@@ -51,6 +63,24 @@ public record TicketWorkflowHistoryResponse(
                 history.isCustomTransition(),
                 history.getCreatedAt()
         );
+    }
+
+    private static WorkflowStatus resolveEffectiveFromStatusRecord(TicketWorkflowHistory history) {
+        if (history.getFromStatusRecord() != null) {
+            return history.getFromStatusRecord();
+        }
+
+        WorkflowTransition transition = history.getWorkflowTransition();
+        return transition == null ? null : transition.getFromStatusRecord();
+    }
+
+    private static WorkflowStatus resolveEffectiveToStatusRecord(TicketWorkflowHistory history) {
+        if (history.getToStatusRecord() != null) {
+            return history.getToStatusRecord();
+        }
+
+        WorkflowTransition transition = history.getWorkflowTransition();
+        return transition == null ? null : transition.getToStatusRecord();
     }
 
     private static String resolveActionDisplayName(TicketWorkflowHistory history) {
@@ -66,6 +96,20 @@ public record TicketWorkflowHistoryResponse(
             return status.getDisplayName();
         }
         return formatLabel(fallbackStatusKey);
+    }
+
+    private static String resolveStatusKey(WorkflowStatus status, String fallbackStatusKey) {
+        if (status != null && isPresent(status.getStatusKey())) {
+            return status.getStatusKey();
+        }
+        return fallbackStatusKey;
+    }
+
+    private static String resolveBehaviorBucket(WorkflowStatus status, String fallbackStatus) {
+        if (status != null && status.getBehaviorBucket() != null) {
+            return status.getBehaviorBucket().name();
+        }
+        return fallbackStatus;
     }
 
     private static String formatLabel(String value) {
