@@ -43,4 +43,4 @@ actions-runner
 .env.test
 
 ### Log File###
-logs/*.log
+logs
