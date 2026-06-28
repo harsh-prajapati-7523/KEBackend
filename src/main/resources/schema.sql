@@ -558,7 +558,7 @@ WHERE wt.from_status = ws.status_key
   AND ws.protected_status = TRUE
   AND ws.active = TRUE
   AND ws.behavior_bucket = wt.from_status
-  AND (wt.from_status_id IS NULL OR wt.from_status_id <> ws.id);
+  AND wt.from_status_id IS NULL;
 
 UPDATE workflow_transitions wt
 SET to_status_id = ws.id
@@ -569,7 +569,7 @@ WHERE wt.to_status = ws.status_key
   AND ws.protected_status = TRUE
   AND ws.active = TRUE
   AND ws.behavior_bucket = wt.to_status
-  AND (wt.to_status_id IS NULL OR wt.to_status_id <> ws.id);
+  AND wt.to_status_id IS NULL;
 
 -- Emergency containment:
 -- Do not delete duplicate workflow_transitions here. Existing rows may already be

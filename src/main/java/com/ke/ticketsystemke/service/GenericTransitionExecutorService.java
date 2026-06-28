@@ -223,8 +223,8 @@ public class GenericTransitionExecutorService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow transition not found"));
         WorkflowAction action = workflowActionRepository.findByActionKey(transition.getActionKey())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workflow action metadata missing"));
-        WorkflowStatus fromStatus = resolveWorkflowStatus(transition.getFromStatusRecord(), transition.getFromStatus());
-        WorkflowStatus toStatus = resolveWorkflowStatus(transition.getToStatusRecord(), transition.getToStatus());
+        WorkflowStatus fromStatus = resolveWorkflowStatus(transition.getFromStatusRecord(), transition.getFromStatus(), false);
+        WorkflowStatus toStatus = resolveWorkflowStatus(transition.getToStatusRecord(), transition.getToStatus(), true);
 
         validateRepairWorkflowEnabled(transition);
         validateTransitionActive(transition);
@@ -272,9 +272,13 @@ public class GenericTransitionExecutorService {
         return actionKey;
     }
 
-    private WorkflowStatus resolveWorkflowStatus(WorkflowStatus statusRecord, TicketStatus fallbackStatus) {
+    private WorkflowStatus resolveWorkflowStatus(
+            WorkflowStatus statusRecord,
+            TicketStatus fallbackStatus,
+            boolean allowCustomTerminalTarget
+    ) {
         if (isWorkflowStatusMetadataValid(statusRecord, fallbackStatus)
-                || isCustomStatusMetadataValid(statusRecord, fallbackStatus)) {
+                || isCustomStatusMetadataValid(statusRecord, fallbackStatus, allowCustomTerminalTarget)) {
             return statusRecord;
         }
         if (statusRecord != null) {
@@ -383,9 +387,13 @@ public class GenericTransitionExecutorService {
         return WorkflowStatusValidationHelper.isSystemStatusMetadataValid(workflowStatus, expectedStatus);
     }
 
-    private boolean isCustomStatusMetadataValid(WorkflowStatus workflowStatus, TicketStatus expectedStatus) {
+    private boolean isCustomStatusMetadataValid(
+            WorkflowStatus workflowStatus,
+            TicketStatus expectedStatus,
+            boolean allowTerminalTarget
+    ) {
         WorkflowStatusValidationHelper.CustomStatusExecutability executability =
-                WorkflowStatusValidationHelper.evaluateCustomStatusExecutability(workflowStatus, false);
+                WorkflowStatusValidationHelper.evaluateCustomStatusExecutability(workflowStatus, allowTerminalTarget);
         return executability.executable() && executability.behaviorBucket() == expectedStatus;
     }
 
