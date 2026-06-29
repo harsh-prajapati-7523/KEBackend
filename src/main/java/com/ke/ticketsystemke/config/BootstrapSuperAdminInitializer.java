@@ -2,6 +2,7 @@ package com.ke.ticketsystemke.config;
 
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.EmployeeRole;
+import com.ke.ticketsystemke.entity.Role;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.RoleRepository;
 import org.slf4j.Logger;
@@ -14,6 +15,8 @@ import org.springframework.core.env.Profiles;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
 
 @Component
 public class BootstrapSuperAdminInitializer implements ApplicationRunner {
@@ -46,16 +49,26 @@ public class BootstrapSuperAdminInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (employeeRepository.existsByRole(EmployeeRole.SUPER_ADMIN)) {
-            log.info("event=bootstrap_super_admin_skipped employeeId={} role={} reason=existing_super_admin",
+        Role superAdminRole = ensureSuperAdminRole();
+        Optional<Employee> existingBootstrapEmployee = employeeRepository.findByEmployeeIdIgnoreCase(BOOTSTRAP_EMPLOYEE_ID);
+        if (existingBootstrapEmployee.isPresent()) {
+            Employee employee = existingBootstrapEmployee.get();
+            employee.setName(BOOTSTRAP_NAME);
+            employee.setRole(EmployeeRole.SUPER_ADMIN);
+            employee.setRoleRecord(superAdminRole);
+            employee.setActive(true);
+            employee.setPassword(passwordEncoder.encode(resolveBootstrapPassword()));
+            employeeRepository.save(employee);
+            log.info("event=bootstrap_super_admin_repaired employeeId={} role={}",
                     BOOTSTRAP_EMPLOYEE_ID, EmployeeRole.SUPER_ADMIN);
             return;
         }
 
-        if (employeeRepository.existsByEmployeeIdIgnoreCase(BOOTSTRAP_EMPLOYEE_ID)) {
-            log.warn("event=bootstrap_super_admin_failed employeeId={} role={} reason=employee_id_already_exists",
+        if (employeeRepository.existsByRole(EmployeeRole.SUPER_ADMIN)
+                || !employeeRepository.findAllByRoleRecord_RoleKey(EmployeeRole.SUPER_ADMIN.name()).isEmpty()) {
+            log.info("event=bootstrap_super_admin_skipped employeeId={} role={} reason=existing_super_admin",
                     BOOTSTRAP_EMPLOYEE_ID, EmployeeRole.SUPER_ADMIN);
-            throw new IllegalStateException("Cannot create bootstrap SUPER_ADMIN because employeeId already exists");
+            return;
         }
 
         String password = resolveBootstrapPassword();
@@ -64,14 +77,28 @@ public class BootstrapSuperAdminInitializer implements ApplicationRunner {
         employee.setEmployeeId(BOOTSTRAP_EMPLOYEE_ID);
         employee.setName(BOOTSTRAP_NAME);
         employee.setRole(EmployeeRole.SUPER_ADMIN);
-        roleRepository.findByRoleKey(EmployeeRole.SUPER_ADMIN.name())
-                .ifPresent(employee::setRoleRecord);
+        employee.setRoleRecord(superAdminRole);
         employee.setActive(true);
         employee.setPassword(passwordEncoder.encode(password));
 
         employeeRepository.save(employee);
         log.info("event=bootstrap_super_admin_created employeeId={} role={}",
                 BOOTSTRAP_EMPLOYEE_ID, EmployeeRole.SUPER_ADMIN);
+    }
+
+    private Role ensureSuperAdminRole() {
+        Role role = roleRepository.findByRoleKey(EmployeeRole.SUPER_ADMIN.name())
+                .orElseGet(() -> {
+                    Role created = new Role();
+                    created.setRoleKey(EmployeeRole.SUPER_ADMIN.name());
+                    created.setDisplayName("Super Admin");
+                    created.setSystemRole(true);
+                    return created;
+                });
+        role.setDisplayName("Super Admin");
+        role.setActive(true);
+        role.setSystemRole(true);
+        return roleRepository.save(role);
     }
 
     private String resolveBootstrapPassword() {
