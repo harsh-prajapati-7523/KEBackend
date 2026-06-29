@@ -133,44 +133,53 @@ SET display_name = EXCLUDED.display_name,
     sort_order = EXCLUDED.sort_order,
     updated_at = now();
 
-WITH repair_actions(action_key) AS (
+WITH repair_actions(action_key, display_name, description, sort_order) AS (
     VALUES
-        ('START_REPAIR_WORK'),
-        ('MARK_MISSING_PART'),
-        ('MARK_PART_AVAILABLE'),
-        ('RESUME_WORK'),
-        ('NEED_CUSTOMER_APPROVAL'),
-        ('CUSTOMER_APPROVED'),
-        ('MARK_IN_WARRANTY'),
-        ('LOG_WARRANTY_COMPLAINT'),
-        ('MARK_REPAIR_COMPLETED'),
-        ('CUSTOMER_DECLINED_REPAIR'),
-        ('CANCEL_PENDING_DELIVERY'),
-        ('DELIVER_TO_CUSTOMER')
+        ('START_REPAIR_WORK', 'Start Work', 'Move a new repair ticket into work in progress.', 110),
+        ('MARK_MISSING_PART', 'Mark Missing Part', 'Mark that a required part is missing.', 120),
+        ('MARK_PART_AVAILABLE', 'Mark Part Available', 'Mark that the required part is now available.', 130),
+        ('RESUME_WORK', 'Resume Work', 'Move the ticket back into active repair work.', 140),
+        ('NEED_CUSTOMER_APPROVAL', 'Need Customer Approval', 'Move the ticket to customer approval pending.', 150),
+        ('CUSTOMER_APPROVED', 'Customer Approved', 'Resume repair after customer approval.', 160),
+        ('MARK_IN_WARRANTY', 'Mark In Warranty', 'Mark the repair as in warranty workflow.', 170),
+        ('LOG_WARRANTY_COMPLAINT', 'Log Warranty Complaint', 'Record that a warranty complaint has been logged.', 180),
+        ('MARK_REPAIR_COMPLETED', 'Mark Repair Completed', 'Mark repair as completed and ready for delivery.', 190),
+        ('CUSTOMER_DECLINED_REPAIR', 'Customer Declined Repair', 'Mark that the customer declined the repair.', 200),
+        ('CANCEL_PENDING_DELIVERY', 'Cancel / Return Pending', 'Mark the ticket as cancelled with return pending.', 210),
+        ('DELIVER_TO_CUSTOMER', 'Delivered To Customer', 'Close the ticket after delivery to customer.', 220)
 )
 INSERT INTO access_key_metadata (
     access_key,
+    display_name,
+    description,
     category,
     system_key,
     protected_key,
     active,
+    sort_order,
     created_at,
     updated_at
 )
 SELECT
     action_key,
+    display_name,
+    description,
     'Repair Workflow',
     false,
     false,
     true,
+    sort_order,
     now(),
     now()
 FROM repair_actions
 ON CONFLICT (access_key) DO UPDATE
-SET category = EXCLUDED.category,
+SET display_name = EXCLUDED.display_name,
+    description = EXCLUDED.description,
+    category = EXCLUDED.category,
     system_key = false,
     protected_key = false,
     active = true,
+    sort_order = EXCLUDED.sort_order,
     updated_at = now();
 
 WITH repair_actions(action_key) AS (
