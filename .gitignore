@@ -44,3 +44,7 @@ actions-runner
 
 ### Log File###
 logs
+
+### DB backups ###
+ke-db-backups/
+*.dump
