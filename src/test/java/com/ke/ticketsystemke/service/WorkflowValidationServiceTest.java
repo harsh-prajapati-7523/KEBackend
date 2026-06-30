@@ -122,6 +122,41 @@ class WorkflowValidationServiceTest {
                 .anyMatch(issue -> "MISSING_ROLE_TRANSITION_SCOPE_COVERAGE".equals(issue.code()));
     }
 
+    @Test
+    void validationAcceptsCustomNewBehaviorBucketAsReachabilityStart() {
+        TicketCategoryConfig category = category();
+        WorkflowAction action = action();
+        WorkflowTransition startTransition = transition(
+                100L,
+                status(1L, "CUSTOM_NEW", TicketStatus.NEW, false),
+                status(2L, "CUSTOM_IN_PROGRESS", TicketStatus.IN_PROGRESS, false)
+        );
+        WorkflowTransition completeTransition = transition(
+                101L,
+                startTransition.getToStatusRecord(),
+                status(3L, "CUSTOM_DONE", TicketStatus.COMPLETED, true)
+        );
+        Role superAdmin = role(1L, "SUPER_ADMIN");
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(startTransition, completeTransition));
+        when(workflowActionRepository.findByActionKey("CUSTOM_FLOW")).thenReturn(Optional.of(action));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(false);
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(101L)).thenReturn(false);
+        when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(100L)).thenReturn(List.of());
+        when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(101L)).thenReturn(List.of());
+        when(roleRepository.findAll()).thenReturn(List.of(superAdmin));
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isTrue();
+        assertThat(response.blockingIssues())
+                .noneMatch(issue -> "UNREACHABLE_WORKFLOW_FROM_NEW".equals(issue.code()));
+        assertThat(response.warnings())
+                .hasSize(2)
+                .allMatch(issue -> "MISSING_ROLE_TRANSITION_SCOPE_COVERAGE".equals(issue.code()));
+    }
+
     private TicketCategoryConfig category() {
         TicketCategoryConfig category = new TicketCategoryConfig();
         ReflectionTestUtils.setField(category, "id", 3L);

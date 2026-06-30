@@ -276,7 +276,7 @@ public class WorkflowValidationService {
         List<Long> frontier = new ArrayList<>();
         for (WorkflowTransition transition : transitions) {
             if (transition.getFromStatusRecord() != null
-                    && "NEW".equals(transition.getFromStatusRecord().getStatusKey())) {
+                    && isNewStartStatus(transition)) {
                 Long newStatusId = transition.getFromStatusRecord().getId();
                 reachable.add(newStatusId);
                 frontier.add(newStatusId);
@@ -317,6 +317,14 @@ public class WorkflowValidationService {
         if (!reachableTerminal) {
             addIssue(blockingIssues, "MISSING_TERMINAL_COMPLETION_PATH", "Workflow has no reachable terminal completion path", null);
         }
+    }
+
+    private boolean isNewStartStatus(WorkflowTransition transition) {
+        if (transition.getFromStatusRecord() == null) {
+            return transition.getFromStatus() == TicketStatus.NEW;
+        }
+        return transition.getFromStatusRecord().getBehaviorBucket() == TicketStatus.NEW
+                || "NEW".equals(transition.getFromStatusRecord().getStatusKey());
     }
 
     private boolean isTerminalSource(WorkflowTransition transition) {
