@@ -458,6 +458,10 @@ public class TicketService {
             if (configuredStartStatus.isPresent()) {
                 return configuredStartStatus.get();
             }
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "DB configured category has no active custom NEW start status"
+            );
         }
         return resolveWorkflowStatusForTicketStatus(TicketStatus.NEW);
     }
