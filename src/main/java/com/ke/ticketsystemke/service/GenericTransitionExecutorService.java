@@ -5,6 +5,7 @@ import com.ke.ticketsystemke.dto.GenericTransitionPreviewRequest;
 import com.ke.ticketsystemke.dto.GenericTransitionPreviewResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
 import com.ke.ticketsystemke.entity.AccessKey;
+import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketStatus;
@@ -12,6 +13,7 @@ import com.ke.ticketsystemke.entity.WorkflowAction;
 import com.ke.ticketsystemke.entity.WorkflowMode;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.entity.WorkflowTransition;
+import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.WorkflowActionRepository;
@@ -40,6 +42,7 @@ public class GenericTransitionExecutorService {
     private final WorkflowStatusRepository workflowStatusRepository;
     private final EffectiveStatusResolver effectiveStatusResolver;
     private final AccessService accessService;
+    private final EmployeeRepository employeeRepository;
     private final TicketChargeService ticketChargeService;
     private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
     private final WorkflowTransitionRoleScopeValidator workflowTransitionRoleScopeValidator;
@@ -54,6 +57,7 @@ public class GenericTransitionExecutorService {
             WorkflowStatusRepository workflowStatusRepository,
             EffectiveStatusResolver effectiveStatusResolver,
             AccessService accessService,
+            EmployeeRepository employeeRepository,
             TicketChargeService ticketChargeService,
             TicketWorkflowHistoryService ticketWorkflowHistoryService,
             WorkflowTransitionRoleScopeValidator workflowTransitionRoleScopeValidator,
@@ -67,6 +71,7 @@ public class GenericTransitionExecutorService {
         this.workflowStatusRepository = workflowStatusRepository;
         this.effectiveStatusResolver = effectiveStatusResolver;
         this.accessService = accessService;
+        this.employeeRepository = employeeRepository;
         this.ticketChargeService = ticketChargeService;
         this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
         this.workflowTransitionRoleScopeValidator = workflowTransitionRoleScopeValidator;
@@ -164,8 +169,19 @@ public class GenericTransitionExecutorService {
         return TicketResponse.from(
                 saved,
                 ticketChargeService.calculateTotalCharge(saved.getId()),
-                effectiveStatusResolver.resolve(saved)
+                effectiveStatusResolver.resolve(saved),
+                resolveEmployeeName(saved.getPickedByEmployeeId())
         );
+    }
+
+    private String resolveEmployeeName(String employeeId) {
+        String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
+        if (lookupEmployeeId.isEmpty()) {
+            return null;
+        }
+        return employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
+                .map(Employee::getName)
+                .orElse(null);
     }
 
     @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)

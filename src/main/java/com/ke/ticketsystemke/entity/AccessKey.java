@@ -6,6 +6,7 @@ public enum AccessKey {
     VIEW_TICKETS,
     CREATE_TICKET,
     PICK_TICKET,
+    ASSIGN_TICKET,
     START_WORK,
     COMPLETE_TICKET,
     CANCEL_TICKET,

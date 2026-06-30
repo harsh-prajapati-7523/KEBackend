@@ -1,5 +1,7 @@
 package com.ke.ticketsystemke.controller;
 
+import com.ke.ticketsystemke.dto.AssignTicketRequest;
+import com.ke.ticketsystemke.dto.AssignableEmployeeResponse;
 import com.ke.ticketsystemke.dto.CancelTicketRequest;
 import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
@@ -14,6 +16,7 @@ import com.ke.ticketsystemke.dto.TicketStatusFilterOptionResponse;
 import com.ke.ticketsystemke.dto.TicketWorkflowHistoryPageResponse;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.service.AccessService;
+import com.ke.ticketsystemke.service.EmployeeService;
 import com.ke.ticketsystemke.service.GenericTransitionExecutorService;
 import com.ke.ticketsystemke.service.TicketService;
 import com.ke.ticketsystemke.service.TicketWorkflowHistoryService;
@@ -23,6 +26,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -42,17 +46,20 @@ public class TicketController {
 
     private final TicketService service;
     private final AccessService accessService;
+    private final EmployeeService employeeService;
     private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
     private final GenericTransitionExecutorService genericTransitionExecutorService;
 
     public TicketController(
             TicketService service,
             AccessService accessService,
+            EmployeeService employeeService,
             TicketWorkflowHistoryService ticketWorkflowHistoryService,
             GenericTransitionExecutorService genericTransitionExecutorService
     ) {
         this.service = service;
         this.accessService = accessService;
+        this.employeeService = employeeService;
         this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
         this.genericTransitionExecutorService = genericTransitionExecutorService;
     }
@@ -117,6 +124,14 @@ public class TicketController {
         return service.getTicketByNumber(ticketNumber);
     }
 
+    @GetMapping("/assignable-employees")
+    public List<AssignableEmployeeResponse> listAssignableEmployees(Authentication authentication) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.ASSIGN_TICKET);
+        log.info("event=ticket_assignable_employees_requested employeeId={}", employeeId);
+        return employeeService.listAssignableEmployees();
+    }
+
     @GetMapping("/{id}")
     public TicketResponse getTicket(
             @PathVariable Long id,
@@ -126,6 +141,21 @@ public class TicketController {
         accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
         log.info("event=ticket_detail_requested employeeId={} ticketId={}", employeeId, id);
         return service.getTicket(id);
+    }
+
+    @PatchMapping("/{id}/assign")
+    public TicketResponse assignTicket(
+            @PathVariable Long id,
+            @Valid @RequestBody AssignTicketRequest request,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.ASSIGN_TICKET);
+        log.info("event=ticket_assignment_requested employeeId={} ticketId={}", employeeId, id);
+        TicketResponse response = service.assignTicket(id, request, employeeId);
+        log.info("event=ticket_assigned employeeId={} ticketId={} currentOwner={}",
+                employeeId, response.id(), response.currentOwnerEmployeeId());
+        return response;
     }
 
     @GetMapping("/status-filter-options")

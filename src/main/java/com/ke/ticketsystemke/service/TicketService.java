@@ -1,5 +1,6 @@
 package com.ke.ticketsystemke.service;
 
+import com.ke.ticketsystemke.dto.AssignTicketRequest;
 import com.ke.ticketsystemke.dto.CancelTicketRequest;
 import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketDynamicValueRequest;
@@ -16,6 +17,7 @@ import com.ke.ticketsystemke.dto.TicketStatusFilterOptionResponse;
 import com.ke.ticketsystemke.entity.CategoryFieldConfig;
 import com.ke.ticketsystemke.entity.DropdownOption;
 import com.ke.ticketsystemke.entity.DropdownSource;
+import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.ManufacturerStatus;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Ticket;
@@ -31,6 +33,7 @@ import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.entity.WorkflowTransition;
 import com.ke.ticketsystemke.repository.CategoryFieldConfigRepository;
 import com.ke.ticketsystemke.repository.DropdownOptionRepository;
+import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
 import com.ke.ticketsystemke.repository.TicketDynamicValueRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
@@ -91,6 +94,7 @@ public class TicketService {
     );
 
     private final TicketRepository repository;
+    private final EmployeeRepository employeeRepository;
     private final TicketCategoryRepository ticketCategoryRepository;
     private final CategoryFieldConfigRepository categoryFieldConfigRepository;
     private final DropdownOptionRepository dropdownOptionRepository;
@@ -108,6 +112,7 @@ public class TicketService {
 
     public TicketService(
             TicketRepository repository,
+            EmployeeRepository employeeRepository,
             TicketCategoryRepository ticketCategoryRepository,
             CategoryFieldConfigRepository categoryFieldConfigRepository,
             DropdownOptionRepository dropdownOptionRepository,
@@ -124,6 +129,7 @@ public class TicketService {
             RepairWorkflowFeatureFlag repairWorkflowFeatureFlag
     ) {
         this.repository = repository;
+        this.employeeRepository = employeeRepository;
         this.ticketCategoryRepository = ticketCategoryRepository;
         this.categoryFieldConfigRepository = categoryFieldConfigRepository;
         this.dropdownOptionRepository = dropdownOptionRepository;
@@ -851,6 +857,50 @@ public class TicketService {
         return toTicketResponse(ticket, ticketChargeService.calculateTotalCharge(ticket));
     }
 
+    @Transactional
+    public TicketResponse assignTicket(Long ticketId, AssignTicketRequest request, String assignedByEmployeeId) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assignment request is required");
+        }
+
+        Ticket ticket = repository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"
+                ));
+        String targetEmployeeId = trimToNull(request.getEmployeeId());
+        if (targetEmployeeId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee is required");
+        }
+
+        Employee targetEmployee = employeeRepository.findByEmployeeIdIgnoreCase(targetEmployeeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
+        if (!targetEmployee.isActive()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot assign ticket to an inactive employee");
+        }
+
+        String previousOwnerEmployeeId = trimToNull(ticket.getPickedByEmployeeId());
+        String normalizedTargetEmployeeId = targetEmployee.getEmployeeId();
+        if (previousOwnerEmployeeId != null && previousOwnerEmployeeId.equalsIgnoreCase(normalizedTargetEmployeeId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This employee is already the current owner.");
+        }
+
+        ticket.setPickedByEmployeeId(normalizedTargetEmployeeId);
+        Ticket saved = repository.save(ticket);
+        ticketWorkflowHistoryService.recordTicketAssignment(
+                saved,
+                ticket.getStatus(),
+                resolveStatusRecordId(ticket),
+                assignedByEmployeeId,
+                previousOwnerEmployeeId,
+                normalizedTargetEmployeeId,
+                request.getNote()
+        );
+        log.info("event=ticket_assigned ticketId={} previousOwner={} newOwner={} assignedBy={}",
+                saved.getId(), previousOwnerEmployeeId, normalizedTargetEmployeeId, assignedByEmployeeId);
+        return toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved));
+    }
+
     @Transactional(readOnly = true)
     public List<TicketStatusFilterOptionResponse> getTicketStatusFilterOptions(String employeeId) {
         List<TicketStatus> ticketStatuses = Arrays.asList(TicketStatus.values());
@@ -1002,7 +1052,7 @@ public class TicketService {
     }
 
     private TicketResponse toTicketResponse(Ticket ticket, BigDecimal totalCharge) {
-        return TicketResponse.from(ticket, totalCharge, effectiveStatusResolver.resolve(ticket));
+        return TicketResponse.from(ticket, totalCharge, effectiveStatusResolver.resolve(ticket), resolveEmployeeName(ticket.getPickedByEmployeeId()));
     }
 
     private List<TicketResponse> toTicketResponses(List<Ticket> tickets) {
@@ -1014,6 +1064,16 @@ public class TicketService {
         return tickets.stream()
                 .map(ticket -> toTicketResponse(ticket, totalsByTicketId.getOrDefault(ticket.getId(), BigDecimal.ZERO.setScale(2))))
                 .toList();
+    }
+
+    private String resolveEmployeeName(String employeeId) {
+        String lookupEmployeeId = trimToNull(employeeId);
+        if (lookupEmployeeId == null) {
+            return null;
+        }
+        return employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
+                .map(Employee::getName)
+                .orElse(null);
     }
 
     private PageRequest ticketReadPageRequest(Integer page, Integer size) {

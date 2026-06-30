@@ -216,6 +216,56 @@ public class TicketWorkflowHistoryService {
         ticketWorkflowHistoryRepository.save(history);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordTicketAssignment(
+            Ticket ticket,
+            TicketStatus status,
+            Long statusId,
+            String executedByEmployeeId,
+            String previousOwnerEmployeeId,
+            String newOwnerEmployeeId,
+            String note
+    ) {
+        if (ticket == null || ticket.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Ticket audit context missing");
+        }
+        if (status == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Ticket status context missing");
+        }
+
+        String employeeNameSnapshot = employeeRepository.findByEmployeeIdIgnoreCase(
+                        executedByEmployeeId == null ? "" : executedByEmployeeId.trim()
+                )
+                .map(Employee::getName)
+                .orElse(null);
+
+        TicketWorkflowHistory history = prepareHistoryEntry(new HistoryEntryDraft(
+                ticket.getId(),
+                ticket.getTicketNumber(),
+                AccessKey.ASSIGN_TICKET.name(),
+                null,
+                null,
+                status.name(),
+                status.name(),
+                statusId,
+                statusId,
+                executedByEmployeeId,
+                employeeNameSnapshot,
+                previousOwnerEmployeeId,
+                newOwnerEmployeeId,
+                note,
+                null,
+                SUCCESS_RESULT,
+                null,
+                null,
+                false,
+                false,
+                null
+        ));
+
+        ticketWorkflowHistoryRepository.save(history);
+    }
+
     TicketWorkflowHistory prepareHistoryEntry(HistoryEntryDraft draft) {
         TicketWorkflowHistory history = new TicketWorkflowHistory();
         history.setTicketId(draft.ticketId());

@@ -13,6 +13,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     Optional<Employee> findByEmployeeIdIgnoreCase(String employeeId);
 
+    List<Employee> findAllByActiveTrueOrderByNameAscEmployeeIdAsc();
+
     boolean existsByEmployeeIdIgnoreCase(String employeeId);
 
     boolean existsByRole(EmployeeRole role);

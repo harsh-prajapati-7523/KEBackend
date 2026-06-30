@@ -1,5 +1,6 @@
 package com.ke.ticketsystemke.service;
 
+import com.ke.ticketsystemke.dto.AssignableEmployeeResponse;
 import com.ke.ticketsystemke.dto.CreateEmployeeRequest;
 import com.ke.ticketsystemke.dto.EmployeeResponse;
 import com.ke.ticketsystemke.entity.Employee;
@@ -40,6 +41,14 @@ public class EmployeeService {
         return employeeRepository.findAll()
                 .stream()
                 .map(EmployeeResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AssignableEmployeeResponse> listAssignableEmployees() {
+        return employeeRepository.findAllByActiveTrueOrderByNameAscEmployeeIdAsc()
+                .stream()
+                .map(AssignableEmployeeResponse::from)
                 .toList();
     }
 

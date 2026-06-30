@@ -34,6 +34,8 @@ public record TicketResponse(
         Instant updatedAt,
         String createdByEmployeeId,
         String pickedByEmployeeId,
+        String currentOwnerEmployeeId,
+        String currentOwnerEmployeeName,
         Instant completedAt,
         String completedByEmployeeId,
         String completionRemark,
@@ -52,9 +54,14 @@ public record TicketResponse(
     }
 
     public static TicketResponse from(Ticket ticket, BigDecimal totalCharge, ResolvedTicketStatus resolvedStatus) {
+        return from(ticket, totalCharge, resolvedStatus, null);
+    }
+
+    public static TicketResponse from(Ticket ticket, BigDecimal totalCharge, ResolvedTicketStatus resolvedStatus, String currentOwnerEmployeeName) {
         TicketCategoryConfig categoryRecord = ticket.getCategoryRecord();
         StatusMetadata statusMetadata = resolveStatusMetadata(ticket, resolvedStatus);
         String categoryKey = categoryRecord != null ? categoryRecord.getCategoryKey() : fallbackCategoryKey(ticket.getCategory());
+        String currentOwnerEmployeeId = ticket.getPickedByEmployeeId();
         return new TicketResponse(
                 ticket.getId(),
                 ticket.getTicketNumber(),
@@ -77,6 +84,8 @@ public record TicketResponse(
                 ticket.getUpdatedAt(),
                 ticket.getCreatedByEmployeeId(),
                 ticket.getPickedByEmployeeId(),
+                currentOwnerEmployeeId,
+                currentOwnerEmployeeName,
                 ticket.getCompletedAt(),
                 ticket.getCompletedByEmployeeId(),
                 ticket.getCompletionRemark(),
