@@ -1,5 +1,6 @@
 package com.ke.ticketsystemke.service;
 
+import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Ticket;
@@ -15,6 +16,7 @@ import com.ke.ticketsystemke.repository.TicketCategoryRepository;
 import com.ke.ticketsystemke.repository.TicketDynamicValueRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
+import com.ke.ticketsystemke.repository.WorkflowTransitionCategoryRuleRepository;
 import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -66,6 +69,9 @@ class TicketServiceAvailableActionsTest {
     private WorkflowTransitionRepository workflowTransitionRepository;
 
     @Mock
+    private WorkflowTransitionCategoryRuleRepository workflowTransitionCategoryRuleRepository;
+
+    @Mock
     private EffectiveStatusResolver effectiveStatusResolver;
 
     @Mock
@@ -92,6 +98,7 @@ class TicketServiceAvailableActionsTest {
                 accessService,
                 workflowStatusRepository,
                 workflowTransitionRepository,
+                workflowTransitionCategoryRuleRepository,
                 effectiveStatusResolver,
                 genericTransitionExecutorService,
                 ticketWorkflowHistoryService,
@@ -209,6 +216,78 @@ class TicketServiceAvailableActionsTest {
                 .containsExactly("START_REPAIR_WORK");
     }
 
+    @Test
+    void createTicketUsesConfiguredCustomNewStatusForDbConfiguredCategory() {
+        WorkflowStatus customNew = customStatus(11L, "CUSTOM_NEW", TicketStatus.NEW, false);
+        WorkflowStatus customInProgress = customStatus(12L, "CUSTOM_IN_PROGRESS", TicketStatus.IN_PROGRESS, false);
+        TicketCategoryConfig category = new TicketCategoryConfig();
+        ReflectionTestUtils.setField(category, "id", 5L);
+        category.setCategoryKey("REPAIR_WORKFLOW_TEST");
+        category.setDisplayName("Repair Workflow Test");
+        category.setActive(true);
+        category.setWorkflowMode(WorkflowMode.DB_CONFIGURED);
+        category.setDbWorkflowEnabled(true);
+        category.setFixedActionsEnabled(false);
+
+        WorkflowTransition transition = new WorkflowTransition();
+        ReflectionTestUtils.setField(transition, "id", 8L);
+        transition.setActionKey("START_SIMPLE_WORK");
+        transition.setDisplayName("Start Simple Work");
+        transition.setFromStatus(TicketStatus.NEW);
+        transition.setToStatus(TicketStatus.IN_PROGRESS);
+        transition.setFromStatusRecord(customNew);
+        transition.setToStatusRecord(customInProgress);
+        transition.setActive(true);
+        transition.setSystemTransition(false);
+        transition.setProtectedTransition(false);
+
+        CreateTicketRequest request = new CreateTicketRequest();
+        request.setCategoryId(5L);
+        request.setCustomerName("QA Customer");
+        request.setMobileNumber("9999999999");
+        request.setVillageOrArea("QA Area");
+        request.setProductType("QA Pump");
+        request.setComplaintDescription("QA complaint");
+
+        when(ticketCategoryRepository.findById(5L)).thenReturn(Optional.of(category));
+        when(categoryFieldConfigRepository.findRenderableFormFieldsByCategoryId(5L)).thenReturn(List.of());
+        when(ticketRepository.getNextTicketNumberValue()).thenReturn(42L);
+        when(workflowTransitionRepository.findByFromStatusAndActiveTrueOrderBySortOrderAscIdAsc(TicketStatus.NEW))
+                .thenReturn(List.of(transition));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(8L)).thenReturn(true);
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(8L, 5L)).thenReturn(true);
+        when(ticketRepository.save(any(Ticket.class))).thenAnswer(invocation -> {
+            Ticket ticket = invocation.getArgument(0);
+            ReflectionTestUtils.setField(ticket, "id", 99L);
+            return ticket;
+        });
+        when(effectiveStatusResolver.resolve(argThat(ticket -> ticket.getStatusRecord() == customNew)))
+                .thenReturn(new ResolvedTicketStatus(
+                        TicketStatus.NEW,
+                        11L,
+                        "CUSTOM_NEW",
+                        "CUSTOM_NEW",
+                        true,
+                        false,
+                        TicketStatus.NEW,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        ResolvedTicketStatus.WarningCode.NONE
+                ));
+
+        ticketService.createTicket(request, "SUPER_ADMIN_001");
+
+        org.mockito.Mockito.verify(ticketRepository).save(argThat((Ticket ticket) ->
+                ticket.getStatus() == TicketStatus.NEW
+                        && ticket.getStatusRecord() == customNew
+                        && "KE-042".equals(ticket.getTicketNumber())
+        ));
+    }
+
     private Ticket inProgressTicket(String pickedByEmployeeId) {
         Ticket ticket = new Ticket();
         ticket.setId(10L);
@@ -227,6 +306,13 @@ class TicketServiceAvailableActionsTest {
         status.setProtectedStatus(true);
         status.setBehaviorBucket(behaviorBucket);
         status.setTerminal(terminal);
+        return status;
+    }
+
+    private WorkflowStatus customStatus(Long id, String statusKey, TicketStatus behaviorBucket, boolean terminal) {
+        WorkflowStatus status = systemStatus(id, statusKey, behaviorBucket, terminal);
+        status.setSystemStatus(false);
+        status.setProtectedStatus(false);
         return status;
     }
 }

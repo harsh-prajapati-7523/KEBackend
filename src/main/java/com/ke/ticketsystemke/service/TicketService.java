@@ -36,6 +36,7 @@ import com.ke.ticketsystemke.repository.TicketDynamicValueRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.TicketSpecifications;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
+import com.ke.ticketsystemke.repository.WorkflowTransitionCategoryRuleRepository;
 import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -63,6 +64,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -98,6 +100,7 @@ public class TicketService {
     private final AccessService accessService;
     private final WorkflowStatusRepository workflowStatusRepository;
     private final WorkflowTransitionRepository workflowTransitionRepository;
+    private final WorkflowTransitionCategoryRuleRepository workflowTransitionCategoryRuleRepository;
     private final EffectiveStatusResolver effectiveStatusResolver;
     private final GenericTransitionExecutorService genericTransitionExecutorService;
     private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
@@ -114,6 +117,7 @@ public class TicketService {
             AccessService accessService,
             WorkflowStatusRepository workflowStatusRepository,
             WorkflowTransitionRepository workflowTransitionRepository,
+            WorkflowTransitionCategoryRuleRepository workflowTransitionCategoryRuleRepository,
             EffectiveStatusResolver effectiveStatusResolver,
             GenericTransitionExecutorService genericTransitionExecutorService,
             TicketWorkflowHistoryService ticketWorkflowHistoryService,
@@ -129,6 +133,7 @@ public class TicketService {
         this.accessService = accessService;
         this.workflowStatusRepository = workflowStatusRepository;
         this.workflowTransitionRepository = workflowTransitionRepository;
+        this.workflowTransitionCategoryRuleRepository = workflowTransitionCategoryRuleRepository;
         this.effectiveStatusResolver = effectiveStatusResolver;
         this.genericTransitionExecutorService = genericTransitionExecutorService;
         this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
@@ -155,7 +160,7 @@ public class TicketService {
         assignCategory(ticket, category);
         ticket.setComplaintDescription(trimToEmpty(request.getComplaintDescription()));
         ticket.setStatus(TicketStatus.NEW);
-        ticket.setStatusRecord(resolveWorkflowStatusForTicketStatus(TicketStatus.NEW));
+        ticket.setStatusRecord(resolveInitialStatusRecord(category));
         ticket.setCreatedByEmployeeId(createdByEmployeeId);
         ticket.setWarrantyStatus(WarrantyStatus.NOT_CHECKED);
         ticket.setManufacturerStatus(ManufacturerStatus.NOT_REQUIRED);
@@ -437,6 +442,35 @@ public class TicketService {
         }
 
         return workflowStatus;
+    }
+
+    private WorkflowStatus resolveInitialStatusRecord(TicketCategoryConfig category) {
+        if (isDbWorkflowMode(category)) {
+            Optional<WorkflowStatus> configuredStartStatus = workflowTransitionRepository
+                    .findByFromStatusAndActiveTrueOrderBySortOrderAscIdAsc(TicketStatus.NEW)
+                    .stream()
+                    .filter(transition -> transition.getFromStatusRecord() != null)
+                    .filter(transition -> transition.getFromStatusRecord().isActive())
+                    .filter(transition -> transition.getFromStatusRecord().getBehaviorBucket() == TicketStatus.NEW)
+                    .filter(transition -> isCategoryAllowed(transition, category.getId()))
+                    .map(WorkflowTransition::getFromStatusRecord)
+                    .findFirst();
+            if (configuredStartStatus.isPresent()) {
+                return configuredStartStatus.get();
+            }
+        }
+        return resolveWorkflowStatusForTicketStatus(TicketStatus.NEW);
+    }
+
+    private boolean isCategoryAllowed(WorkflowTransition transition, Long categoryId) {
+        if (transition == null || transition.getId() == null || categoryId == null) {
+            return false;
+        }
+        if (!workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(transition.getId())) {
+            return true;
+        }
+        return workflowTransitionCategoryRuleRepository
+                .existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(transition.getId(), categoryId);
     }
 
     private boolean isAdminRole(String role) {
