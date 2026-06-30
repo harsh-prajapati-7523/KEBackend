@@ -92,6 +92,31 @@ public class TicketController {
         return list;
     }
 
+    @GetMapping("/my")
+    public List<TicketResponse> listMyTickets(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
+        log.info("event=my_ticket_list_requested employeeId={} page={} size={}", employeeId, page, size);
+        List<TicketResponse> list = service.listMyTickets(employeeId, page, size);
+        log.info("event=my_ticket_list_returned employeeId={} count={}", employeeId, list.size());
+        return list;
+    }
+
+    @GetMapping("/by-number/{ticketNumber}")
+    public TicketResponse getTicketByNumber(
+            @PathVariable String ticketNumber,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.VIEW_TICKETS);
+        log.info("event=ticket_by_number_requested employeeId={}", employeeId);
+        return service.getTicketByNumber(ticketNumber);
+    }
+
     @GetMapping("/{id}")
     public TicketResponse getTicket(
             @PathVariable Long id,

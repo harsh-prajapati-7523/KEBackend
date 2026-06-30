@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface TicketRepository
         extends JpaRepository<Ticket, Long>, JpaSpecificationExecutor<Ticket> {
@@ -18,6 +19,10 @@ public interface TicketRepository
     List<Ticket> findAllByOrderByCreatedAtDesc();
 
     List<Ticket> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    List<Ticket> findByPickedByEmployeeIdOrderByCreatedAtDesc(String pickedByEmployeeId, Pageable pageable);
+
+    Optional<Ticket> findFirstByTicketNumberIgnoreCase(String ticketNumber);
 
     List<Ticket> findTop10ByMobileNumberAndIdNotOrderByCreatedAtDesc(String mobileNumber, Long id);
 

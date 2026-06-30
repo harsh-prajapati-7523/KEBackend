@@ -818,8 +818,32 @@ public class TicketService {
     }
 
     @Transactional(readOnly = true)
+    public List<TicketResponse> listMyTickets(String employeeId, Integer page, Integer size) {
+        PageRequest pageRequest = ticketReadPageRequest(page, size);
+        List<Ticket> tickets = repository.findByPickedByEmployeeIdOrderByCreatedAtDesc(employeeId, pageRequest);
+        List<TicketResponse> list = toTicketResponses(tickets);
+        log.info("event=my_ticket_list_returned employeeId={} count={}", employeeId, list.size());
+        return list;
+    }
+
+    @Transactional(readOnly = true)
     public TicketResponse getTicket(Long ticketId) {
         Ticket ticket = repository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"
+                ));
+        return toTicketResponse(ticket, ticketChargeService.calculateTotalCharge(ticket));
+    }
+
+    @Transactional(readOnly = true)
+    public TicketResponse getTicketByNumber(String ticketNumber) {
+        String normalizedTicketNumber = trimToNull(ticketNumber);
+        if (normalizedTicketNumber == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found");
+        }
+
+        Ticket ticket = repository.findFirstByTicketNumberIgnoreCase(normalizedTicketNumber)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Ticket not found"
