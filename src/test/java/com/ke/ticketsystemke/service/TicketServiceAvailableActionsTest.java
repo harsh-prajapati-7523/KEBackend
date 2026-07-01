@@ -222,6 +222,32 @@ class TicketServiceAvailableActionsTest {
     }
 
     @Test
+    void dbConfiguredDefaultCategoryKeepsFixedPickActionAvailable() {
+        WorkflowStatus newStatus = systemStatus(1L, "NEW", TicketStatus.NEW, false);
+        TicketCategoryConfig category = new TicketCategoryConfig();
+        ReflectionTestUtils.setField(category, "id", 5L);
+        category.setCategoryKey("REPAIR_WORKFLOW_TEST");
+        category.setWorkflowMode(WorkflowMode.DB_CONFIGURED);
+        category.setDbWorkflowEnabled(true);
+        category.setFixedActionsEnabled(true);
+
+        Ticket ticket = new Ticket();
+        ticket.setId(21L);
+        ticket.setStatus(TicketStatus.NEW);
+        ticket.setStatusRecord(newStatus);
+        ticket.setCategoryRecord(category);
+
+        when(ticketRepository.findById(21L)).thenReturn(Optional.of(ticket));
+        when(workflowService.isTransitionAllowedForCategory(AccessKey.PICK_TICKET, TicketStatus.NEW, TicketStatus.PICKED, 5L))
+                .thenReturn(true);
+
+        TicketAvailableActionsResponse response = ticketService.getAvailableActions(21L, "admin-1", "SUPER_ADMIN");
+
+        assertThat(response.actions().get(AccessKey.PICK_TICKET).available()).isTrue();
+        assertThat(response.actions().get(AccessKey.PICK_TICKET).reasonCode()).isNull();
+    }
+
+    @Test
     void createTicketUsesConfiguredCustomNewStatusForDbConfiguredCategory() {
         WorkflowStatus customNew = customStatus(11L, "CUSTOM_NEW", TicketStatus.NEW, false);
         WorkflowStatus customInProgress = customStatus(12L, "CUSTOM_IN_PROGRESS", TicketStatus.IN_PROGRESS, false);

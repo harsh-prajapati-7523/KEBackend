@@ -98,6 +98,33 @@ public class WorkflowService {
     }
 
     @Transactional(readOnly = true)
+    public boolean isTransitionAllowedForCategory(
+            AccessKey actionKey,
+            TicketStatus fromStatus,
+            TicketStatus toStatus,
+            Long categoryId
+    ) {
+        try {
+            validateWorkflowActionKey(actionKey);
+            if (categoryId == null || isTerminalStatus(fromStatus)) {
+                log.warn("event=workflow_transition_denied actionKey={} fromStatus={} toStatus={} categoryId={} decision=invalid_scope",
+                        actionKey, fromStatus, toStatus, categoryId);
+                return false;
+            }
+            return workflowTransitionRepository
+                    .findAllByActionKeyAndFromStatusAndToStatusOrderByIdAsc(actionKey.name(), fromStatus, toStatus)
+                    .stream()
+                    .anyMatch(transition -> transition.isActive()
+                            && hasValidStatusMetadata(transition)
+                            && isCategoryAllowed(transition, categoryId));
+        } catch (RuntimeException ex) {
+            log.warn("event=workflow_transition_check_failed actionKey={} fromStatus={} toStatus={} categoryId={} decision=deny",
+                    actionKey, fromStatus, toStatus, categoryId);
+            return false;
+        }
+    }
+
+    @Transactional(readOnly = true)
     public void requireTransitionAllowed(AccessKey actionKey, TicketStatus fromStatus, TicketStatus toStatus) {
         if (!isTransitionAllowed(actionKey, fromStatus, toStatus)) {
             log.warn("event=workflow_transition_denied actionKey={} fromStatus={} toStatus={} decision=deny", actionKey, fromStatus, toStatus);

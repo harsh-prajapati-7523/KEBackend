@@ -117,7 +117,7 @@ public class DefaultWorkflowProvisioningService {
         workflowValidationService.requireValidCategoryWorkflow(category.getId());
         category.setWorkflowMode(WorkflowMode.DB_CONFIGURED);
         category.setDbWorkflowEnabled(true);
-        category.setFixedActionsEnabled(false);
+        category.setFixedActionsEnabled(true);
         category.setWorkflowModeUpdatedAt(Instant.now());
         category.setWorkflowModeUpdatedByEmployee(actor);
     }

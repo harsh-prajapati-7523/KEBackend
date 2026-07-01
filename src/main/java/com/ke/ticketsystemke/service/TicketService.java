@@ -739,7 +739,11 @@ public class TicketService {
             );
         }
 
-        if (!workflowService.isTransitionAllowed(actionKey, status, targetStatus)) {
+        TicketCategoryConfig category = resolveTicketCategory(ticket);
+        boolean transitionAllowed = isDbWorkflowMode(category)
+                ? workflowService.isTransitionAllowedForCategory(actionKey, status, targetStatus, category.getId())
+                : workflowService.isTransitionAllowed(actionKey, status, targetStatus);
+        if (!transitionAllowed) {
             return unavailable(
                     WORKFLOW_TRANSITION_INACTIVE,
                     "This action is disabled for the current workflow status."

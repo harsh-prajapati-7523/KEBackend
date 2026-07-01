@@ -29,6 +29,12 @@ public interface WorkflowTransitionRepository extends JpaRepository<WorkflowTran
             TicketStatus toStatus
     );
 
+    List<WorkflowTransition> findAllByActionKeyAndFromStatusAndToStatusOrderByIdAsc(
+            String actionKey,
+            TicketStatus fromStatus,
+            TicketStatus toStatus
+    );
+
     Optional<WorkflowTransition> findByActionKeyAndFromStatusRecord_IdAndToStatusRecord_Id(
             String actionKey,
             Long fromStatusId,
