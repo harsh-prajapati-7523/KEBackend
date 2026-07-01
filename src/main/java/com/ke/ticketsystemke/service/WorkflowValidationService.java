@@ -94,7 +94,8 @@ public class WorkflowValidationService {
                 reportInactiveActionAccessMetadata(transition, warnings);
                 continue;
             }
-            if (action.get().isProtectedAction() || transition.isProtectedTransition()) {
+            if ((action.get().isProtectedAction() || transition.isProtectedTransition())
+                    && !isCategoryExplicitlyAllowed(transition, category.getId())) {
                 continue;
             }
             if (transition.getToStatusRecord() != null && !transition.getToStatusRecord().isActive()) {
@@ -177,6 +178,11 @@ public class WorkflowValidationService {
         if (!workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(transition.getId())) {
             return true;
         }
+        return workflowTransitionCategoryRuleRepository
+                .existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(transition.getId(), categoryId);
+    }
+
+    private boolean isCategoryExplicitlyAllowed(WorkflowTransition transition, Long categoryId) {
         return workflowTransitionCategoryRuleRepository
                 .existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(transition.getId(), categoryId);
     }

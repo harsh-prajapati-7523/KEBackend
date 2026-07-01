@@ -12,6 +12,7 @@ import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.entity.WorkflowTransition;
 import com.ke.ticketsystemke.repository.CategoryFieldConfigRepository;
 import com.ke.ticketsystemke.repository.DropdownOptionRepository;
+import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
 import com.ke.ticketsystemke.repository.TicketDynamicValueRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
@@ -40,6 +41,9 @@ class TicketServiceAvailableActionsTest {
 
     @Mock
     private TicketRepository ticketRepository;
+
+    @Mock
+    private EmployeeRepository employeeRepository;
 
     @Mock
     private TicketCategoryRepository ticketCategoryRepository;
@@ -89,6 +93,7 @@ class TicketServiceAvailableActionsTest {
     void setUp() {
         ticketService = new TicketService(
                 ticketRepository,
+                employeeRepository,
                 ticketCategoryRepository,
                 categoryFieldConfigRepository,
                 dropdownOptionRepository,

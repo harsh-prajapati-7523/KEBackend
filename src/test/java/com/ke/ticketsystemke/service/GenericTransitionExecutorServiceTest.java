@@ -6,6 +6,7 @@ import com.ke.ticketsystemke.entity.WorkflowAction;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.entity.WorkflowTransition;
 import com.ke.ticketsystemke.repository.TicketCategoryRepository;
+import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.TicketRepository;
 import com.ke.ticketsystemke.repository.WorkflowActionRepository;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
@@ -49,6 +50,9 @@ class GenericTransitionExecutorServiceTest {
     private AccessService accessService;
 
     @Mock
+    private EmployeeRepository employeeRepository;
+
+    @Mock
     private TicketChargeService ticketChargeService;
 
     @Mock
@@ -75,6 +79,7 @@ class GenericTransitionExecutorServiceTest {
                 workflowStatusRepository,
                 effectiveStatusResolver,
                 accessService,
+                employeeRepository,
                 ticketChargeService,
                 ticketWorkflowHistoryService,
                 new WorkflowTransitionRoleScopeValidator(workflowTransitionRoleRuleRepository, null, null),

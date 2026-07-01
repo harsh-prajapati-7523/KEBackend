@@ -157,6 +157,44 @@ class WorkflowValidationServiceTest {
                 .allMatch(issue -> "MISSING_ROLE_TRANSITION_SCOPE_COVERAGE".equals(issue.code()));
     }
 
+    @Test
+    void validationAcceptsProtectedFixedTransitionsWhenExplicitlyEnabledForCategory() {
+        TicketCategoryConfig category = category();
+        WorkflowAction action = action();
+        action.setProtectedAction(true);
+        WorkflowTransition startTransition = transition(
+                100L,
+                status(1L, "NEW", TicketStatus.NEW, false),
+                status(2L, "PICKED", TicketStatus.PICKED, false)
+        );
+        startTransition.setProtectedTransition(true);
+        WorkflowTransition completeTransition = transition(
+                101L,
+                startTransition.getToStatusRecord(),
+                status(3L, "COMPLETED", TicketStatus.COMPLETED, true)
+        );
+        completeTransition.setProtectedTransition(true);
+        Role superAdmin = role(1L, "SUPER_ADMIN");
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(startTransition, completeTransition));
+        when(workflowActionRepository.findByActionKey("CUSTOM_FLOW")).thenReturn(Optional.of(action));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(100L, 3L))
+                .thenReturn(true);
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(101L, 3L))
+                .thenReturn(true);
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(true);
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(101L)).thenReturn(true);
+        when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(100L)).thenReturn(List.of());
+        when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(101L)).thenReturn(List.of());
+        when(roleRepository.findAll()).thenReturn(List.of(superAdmin));
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isTrue();
+        assertThat(response.blockingIssues()).isEmpty();
+    }
+
     private TicketCategoryConfig category() {
         TicketCategoryConfig category = new TicketCategoryConfig();
         ReflectionTestUtils.setField(category, "id", 3L);
