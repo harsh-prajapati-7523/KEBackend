@@ -32,15 +32,18 @@ public class TicketCategoryService {
     private final TicketCategoryRepository ticketCategoryRepository;
     private final EmployeeRepository employeeRepository;
     private final WorkflowValidationService workflowValidationService;
+    private final DefaultWorkflowProvisioningService defaultWorkflowProvisioningService;
 
     public TicketCategoryService(
             TicketCategoryRepository ticketCategoryRepository,
             EmployeeRepository employeeRepository,
-            WorkflowValidationService workflowValidationService
+            WorkflowValidationService workflowValidationService,
+            DefaultWorkflowProvisioningService defaultWorkflowProvisioningService
     ) {
         this.ticketCategoryRepository = ticketCategoryRepository;
         this.employeeRepository = employeeRepository;
         this.workflowValidationService = workflowValidationService;
+        this.defaultWorkflowProvisioningService = defaultWorkflowProvisioningService;
     }
 
     @Transactional(readOnly = true)
@@ -71,6 +74,8 @@ public class TicketCategoryService {
 
         try {
             TicketCategoryConfig created = ticketCategoryRepository.saveAndFlush(category);
+            Employee actor = resolveEmployee(actorEmployeeId);
+            defaultWorkflowProvisioningService.provisionAndActivate(created, actor);
             log.info("event=ticket_category_created actorEmployeeId={} categoryId={} categoryKey={} targetActive={}",
                     actorEmployeeId, created.getId(), created.getCategoryKey(), created.isActive());
             return TicketCategoryResponse.from(created);

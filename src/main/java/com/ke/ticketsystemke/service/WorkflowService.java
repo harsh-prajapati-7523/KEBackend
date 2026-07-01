@@ -7,7 +7,6 @@ import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionRequest;
 import com.ke.ticketsystemke.dto.UpsertWorkflowTransitionCategoryRuleRequest;
 import com.ke.ticketsystemke.dto.UpsertWorkflowTransitionRoleRuleRequest;
 import com.ke.ticketsystemke.dto.WorkflowTransitionCategoryRuleResponse;
-import com.ke.ticketsystemke.dto.WorkflowTransitionOptionResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionOptionsResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionRoleRuleResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionResponse;
@@ -39,9 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -54,16 +51,6 @@ public class WorkflowService {
             AccessKey.COMPLETE_TICKET,
             AccessKey.CANCEL_TICKET
     );
-    private static final List<SafeTransitionOption> SAFE_TRANSITION_OPTIONS = List.of(
-            new SafeTransitionOption(AccessKey.PICK_TICKET, "Pick Ticket", TicketStatus.NEW, TicketStatus.PICKED, 10),
-            new SafeTransitionOption(AccessKey.PICK_TICKET, "Pick Ticket", TicketStatus.PICKED, TicketStatus.PICKED, 20),
-            new SafeTransitionOption(AccessKey.START_WORK, "Start Work", TicketStatus.PICKED, TicketStatus.IN_PROGRESS, 30),
-            new SafeTransitionOption(AccessKey.COMPLETE_TICKET, "Complete Ticket", TicketStatus.IN_PROGRESS, TicketStatus.COMPLETED, 40),
-            new SafeTransitionOption(AccessKey.CANCEL_TICKET, "Cancel Ticket", TicketStatus.NEW, TicketStatus.CANCELLED, 50),
-            new SafeTransitionOption(AccessKey.CANCEL_TICKET, "Cancel Ticket", TicketStatus.PICKED, TicketStatus.CANCELLED, 60),
-            new SafeTransitionOption(AccessKey.CANCEL_TICKET, "Cancel Ticket", TicketStatus.IN_PROGRESS, TicketStatus.CANCELLED, 70)
-    );
-
     private final WorkflowTransitionRepository workflowTransitionRepository;
     private final EmployeeRepository employeeRepository;
     private final WorkflowStatusRepository workflowStatusRepository;
@@ -130,21 +117,8 @@ public class WorkflowService {
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = CacheNames.WORKFLOW_TRANSITION_OPTIONS, key = "'safeOptions'")
     public WorkflowTransitionOptionsResponse getTransitionOptions(String employeeId) {
-        Map<TransitionKey, WorkflowTransition> transitionsByKey = new HashMap<>();
-        for (WorkflowTransition transition : workflowTransitionRepository.findAll()) {
-            transitionsByKey.put(
-                    new TransitionKey(transition.getActionKey(), transition.getFromStatus(), transition.getToStatus()),
-                    transition
-            );
-        }
-
-        List<WorkflowTransitionOptionResponse> options = SAFE_TRANSITION_OPTIONS
-                .stream()
-                .map(option -> toOptionResponse(option, transitionsByKey.get(option.key())))
-                .toList();
-
-        log.info("event=workflow_transition_options_returned employeeId={} optionCount={}", employeeId, options.size());
-        return new WorkflowTransitionOptionsResponse(options);
+        log.info("event=workflow_transition_options_returned employeeId={} optionCount=0 reason=template_options_removed", employeeId);
+        return new WorkflowTransitionOptionsResponse(List.of());
     }
 
     @Transactional(readOnly = true)
@@ -386,12 +360,7 @@ public class WorkflowService {
         Employee employee = employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
 
-        WorkflowTransition transition;
-        if (request.getFromStatusId() != null || request.getToStatusId() != null) {
-            transition = buildCustomTransition(request, actionKey, displayName, employee);
-        } else {
-            transition = buildSafeTransition(request, actionKey, displayName, employee);
-        }
+        WorkflowTransition transition = buildCustomTransition(request, actionKey, displayName, employee);
 
         if (transition.isActive()) {
             validateTransitionActivation(transition);
@@ -404,54 +373,6 @@ public class WorkflowService {
                 saved.getFromStatus(),
                 saved.getToStatus());
         return WorkflowTransitionResponse.from(saved);
-    }
-
-    private WorkflowTransition buildSafeTransition(
-            CreateWorkflowTransitionRequest request,
-            String actionKey,
-            String displayName,
-            Employee employee
-    ) {
-        AccessKey systemActionKey = parseSystemWorkflowActionKey(actionKey);
-        SafeTransitionOption safeOption = findSafeTransitionOption(
-                systemActionKey,
-                request.getFromStatus(),
-                request.getToStatus()
-        );
-
-        if (safeOption == null) {
-            log.warn("event=workflow_transition_create_rejected actionKey={} fromStatus={} toStatus={} result=unsupported",
-                    actionKey,
-                    request.getFromStatus(),
-                    request.getToStatus());
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported workflow transition");
-        }
-
-        if (workflowTransitionRepository.findByActionKeyAndFromStatusAndToStatus(
-                actionKey,
-                request.getFromStatus(),
-                request.getToStatus()
-        ).isPresent()) {
-            log.warn("event=workflow_transition_create_rejected actionKey={} fromStatus={} toStatus={} result=duplicate",
-                    actionKey,
-                    request.getFromStatus(),
-                    request.getToStatus());
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Workflow transition already exists");
-        }
-
-        WorkflowTransition transition = new WorkflowTransition();
-        transition.setActionKey(actionKey);
-        transition.setDisplayName(displayName);
-        transition.setFromStatus(request.getFromStatus());
-        transition.setToStatus(request.getToStatus());
-        transition.setFromStatusRecord(resolveWorkflowStatusForTicketStatus(request.getFromStatus()));
-        transition.setToStatusRecord(resolveWorkflowStatusForTicketStatus(request.getToStatus()));
-        transition.setActive(request.getActive() == null || request.getActive());
-        transition.setSortOrder(request.getSortOrder() == null ? safeOption.sortOrder() : request.getSortOrder());
-        transition.setSystemTransition(false);
-        transition.setProtectedTransition(false);
-        transition.setUpdatedByEmployee(employee);
-        return transition;
     }
 
     private WorkflowTransition buildCustomTransition(
@@ -536,16 +457,6 @@ public class WorkflowService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Action key must contain 2 to 60 uppercase letters, digits, or underscores");
         }
         return actionKey;
-    }
-
-    private AccessKey parseSystemWorkflowActionKey(String actionKey) {
-        try {
-            AccessKey accessKey = AccessKey.valueOf(actionKey);
-            validateWorkflowActionKey(accessKey);
-            return accessKey;
-        } catch (IllegalArgumentException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid workflow action key");
-        }
     }
 
     private boolean isProtectedFixedAction(String actionKey) {
@@ -739,53 +650,4 @@ public class WorkflowService {
                 && workflowStatus.getBehaviorBucket() == expectedStatus;
     }
 
-    private SafeTransitionOption findSafeTransitionOption(
-            AccessKey actionKey,
-            TicketStatus fromStatus,
-            TicketStatus toStatus
-    ) {
-        TransitionKey key = new TransitionKey(actionKey == null ? null : actionKey.name(), fromStatus, toStatus);
-        return SAFE_TRANSITION_OPTIONS.stream()
-                .filter(option -> option.key().equals(key))
-                .findFirst()
-                .orElse(null);
-    }
-
-    private WorkflowTransitionOptionResponse toOptionResponse(
-            SafeTransitionOption option,
-            WorkflowTransition transition
-    ) {
-        return new WorkflowTransitionOptionResponse(
-                option.actionKey(),
-                option.displayName(),
-                option.fromStatus(),
-                option.toStatus(),
-                transition != null,
-                transition == null ? null : transition.getId(),
-                transition == null ? null : transition.isActive(),
-                transition == null ? null : transition.getSortOrder(),
-                transition == null ? null : transition.isSystemTransition(),
-                transition == null ? null : transition.isProtectedTransition()
-        );
-    }
-
-    private record SafeTransitionOption(
-            AccessKey actionKey,
-            String displayName,
-            TicketStatus fromStatus,
-            TicketStatus toStatus,
-            Integer sortOrder
-    ) {
-
-        private TransitionKey key() {
-            return new TransitionKey(actionKey.name(), fromStatus, toStatus);
-        }
-    }
-
-    private record TransitionKey(
-            String actionKey,
-            TicketStatus fromStatus,
-            TicketStatus toStatus
-    ) {
-    }
 }
