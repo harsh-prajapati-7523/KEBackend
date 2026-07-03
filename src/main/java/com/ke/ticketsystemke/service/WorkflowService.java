@@ -7,8 +7,10 @@ import com.ke.ticketsystemke.dto.UpdateWorkflowTransitionRequest;
 import com.ke.ticketsystemke.dto.UpsertWorkflowTransitionCategoryRuleRequest;
 import com.ke.ticketsystemke.dto.UpsertWorkflowTransitionRoleRuleRequest;
 import com.ke.ticketsystemke.dto.WorkflowTransitionCategoryRuleResponse;
+import com.ke.ticketsystemke.dto.WorkflowTransitionCategoryRulesResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionOptionsResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionRoleRuleResponse;
+import com.ke.ticketsystemke.dto.WorkflowTransitionRoleRulesResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionResponse;
 import com.ke.ticketsystemke.config.CacheNames;
 import com.ke.ticketsystemke.entity.AccessKey;
@@ -38,8 +40,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class WorkflowService {
@@ -157,6 +161,20 @@ public class WorkflowService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public WorkflowTransitionCategoryRulesResponse listAllCategoryRules() {
+        return new WorkflowTransitionCategoryRulesResponse(
+                workflowTransitionCategoryRuleRepository.findAllOrderedByTransitionIdAndId()
+                        .stream()
+                        .map(WorkflowTransitionCategoryRuleResponse::from)
+                        .collect(Collectors.groupingBy(
+                                WorkflowTransitionCategoryRuleResponse::transitionId,
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        ))
+        );
+    }
+
     @Transactional
     @CacheEvict(cacheNames = {
             CacheNames.WORKFLOW_TRANSITIONS,
@@ -227,6 +245,20 @@ public class WorkflowService {
                 .stream()
                 .map(WorkflowTransitionRoleRuleResponse::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public WorkflowTransitionRoleRulesResponse listAllRoleRules() {
+        return new WorkflowTransitionRoleRulesResponse(
+                workflowTransitionRoleRuleRepository.findAllOrderedByTransitionIdAndId()
+                        .stream()
+                        .map(WorkflowTransitionRoleRuleResponse::from)
+                        .collect(Collectors.groupingBy(
+                                WorkflowTransitionRoleRuleResponse::transitionId,
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        ))
+        );
     }
 
     @Transactional

@@ -2,11 +2,15 @@ package com.ke.ticketsystemke.repository;
 
 import com.ke.ticketsystemke.entity.WorkflowTransitionRoleRule;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface WorkflowTransitionRoleRuleRepository extends JpaRepository<WorkflowTransitionRoleRule, Long> {
+
+    @Query("select rule from WorkflowTransitionRoleRule rule order by rule.workflowTransition.id asc, rule.id asc")
+    List<WorkflowTransitionRoleRule> findAllOrderedByTransitionIdAndId();
 
     List<WorkflowTransitionRoleRule> findAllByWorkflowTransition_IdOrderByIdAsc(Long workflowTransitionId);
 

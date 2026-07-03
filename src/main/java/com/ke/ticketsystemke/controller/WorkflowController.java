@@ -9,8 +9,10 @@ import com.ke.ticketsystemke.dto.UpsertWorkflowTransitionRoleRuleRequest;
 import com.ke.ticketsystemke.dto.ValidateCategoryWorkflowRequest;
 import com.ke.ticketsystemke.dto.WorkflowValidationResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionCategoryRuleResponse;
+import com.ke.ticketsystemke.dto.WorkflowTransitionCategoryRulesResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionOptionsResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionRoleRuleResponse;
+import com.ke.ticketsystemke.dto.WorkflowTransitionRoleRulesResponse;
 import com.ke.ticketsystemke.dto.WorkflowTransitionResponse;
 import com.ke.ticketsystemke.service.WorkflowService;
 import com.ke.ticketsystemke.service.WorkflowValidationService;
@@ -76,6 +78,11 @@ public class WorkflowController {
         return workflowService.listCategoryRules(transitionId);
     }
 
+    @GetMapping("/transition-category-rules")
+    public WorkflowTransitionCategoryRulesResponse listAllCategoryRules() {
+        return workflowService.listAllCategoryRules();
+    }
+
     @PostMapping("/transitions/{transitionId}/category-rules")
     public ResponseEntity<WorkflowTransitionCategoryRuleResponse> createCategoryRule(
             @PathVariable Long transitionId,
@@ -99,6 +106,11 @@ public class WorkflowController {
     @GetMapping("/transitions/{transitionId}/role-rules")
     public List<WorkflowTransitionRoleRuleResponse> listRoleRules(@PathVariable Long transitionId) {
         return workflowService.listRoleRules(transitionId);
+    }
+
+    @GetMapping("/transition-role-rules")
+    public WorkflowTransitionRoleRulesResponse listAllRoleRules() {
+        return workflowService.listAllRoleRules();
     }
 
     @PostMapping("/transitions/{transitionId}/role-rules")
