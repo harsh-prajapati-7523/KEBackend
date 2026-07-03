@@ -196,6 +196,58 @@ class WorkflowValidationServiceTest {
     }
 
     @Test
+    void validationSeedsAllNewBehaviorBucketStartsWhenLiteralNewPathAlsoExists() {
+        TicketCategoryConfig category = category();
+        WorkflowAction fixedStartAction = action("PICK_TICKET");
+        WorkflowAction fixedCompleteAction = action("START_WORK");
+        WorkflowAction customStartAction = action("START_SIMPLE_WORK");
+        WorkflowAction customCompleteAction = action("COMPLETE_SIMPLE_WORK");
+        WorkflowStatus literalNew = status(1L, "NEW", TicketStatus.NEW, false);
+        WorkflowStatus picked = status(2L, "PICKED", TicketStatus.PICKED, false);
+        WorkflowStatus inProgress = status(3L, "IN_PROGRESS", TicketStatus.IN_PROGRESS, false);
+        WorkflowStatus completed = status(4L, "COMPLETED", TicketStatus.COMPLETED, true);
+        WorkflowStatus customNew = status(5L, "CUSTOM_NEW", TicketStatus.NEW, false);
+        WorkflowStatus customInProgress = status(6L, "CUSTOM_IN_PROGRESS", TicketStatus.IN_PROGRESS, false);
+        WorkflowStatus customDone = status(7L, "CUSTOM_DONE", TicketStatus.COMPLETED, true);
+        WorkflowTransition fixedStartTransition = transition(100L, "PICK_TICKET", literalNew, picked);
+        WorkflowTransition fixedCompleteTransition = transition(101L, "START_WORK", picked, inProgress);
+        WorkflowTransition fixedTerminalTransition = transition(102L, "COMPLETE_SIMPLE_WORK", inProgress, completed);
+        WorkflowTransition customStartTransition = transition(103L, "START_SIMPLE_WORK", customNew, customInProgress);
+        WorkflowTransition customCompleteTransition = transition(104L, "COMPLETE_SIMPLE_WORK", customInProgress, customDone);
+        Role superAdmin = role(1L, "SUPER_ADMIN");
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(
+                fixedStartTransition,
+                fixedCompleteTransition,
+                fixedTerminalTransition,
+                customStartTransition,
+                customCompleteTransition
+        ));
+        when(workflowActionRepository.findByActionKey("PICK_TICKET")).thenReturn(Optional.of(fixedStartAction));
+        when(workflowActionRepository.findByActionKey("START_WORK")).thenReturn(Optional.of(fixedCompleteAction));
+        when(workflowActionRepository.findByActionKey("START_SIMPLE_WORK")).thenReturn(Optional.of(customStartAction));
+        when(workflowActionRepository.findByActionKey("COMPLETE_SIMPLE_WORK")).thenReturn(Optional.of(customCompleteAction));
+        for (long transitionId = 100L; transitionId <= 104L; transitionId++) {
+            when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(transitionId)).thenReturn(true);
+            when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(transitionId, 3L))
+                    .thenReturn(true);
+            when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(transitionId)).thenReturn(List.of());
+        }
+        when(roleRepository.findAll()).thenReturn(List.of(superAdmin));
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isTrue();
+        assertThat(response.blockingIssues())
+                .noneMatch(issue -> "UNREACHABLE_WORKFLOW_PATH".equals(issue.code()))
+                .noneMatch(issue -> "UNREACHABLE_WORKFLOW_FROM_NEW".equals(issue.code()));
+        assertThat(response.warnings())
+                .hasSize(5)
+                .allMatch(issue -> "MISSING_ROLE_TRANSITION_SCOPE_COVERAGE".equals(issue.code()));
+    }
+
+    @Test
     void validationReportsStaleTransitionTargetBehavior() {
         TicketCategoryConfig category = category();
         WorkflowAction action = action();

@@ -293,9 +293,9 @@ public class WorkflowValidationService {
             if (transition.getFromStatusRecord() != null
                     && isNewStartStatus(transition)) {
                 Long newStatusId = transition.getFromStatusRecord().getId();
-                reachable.add(newStatusId);
-                frontier.add(newStatusId);
-                break;
+                if (reachable.add(newStatusId)) {
+                    frontier.add(newStatusId);
+                }
             }
         }
 
