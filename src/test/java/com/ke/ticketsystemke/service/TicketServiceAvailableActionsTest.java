@@ -119,27 +119,14 @@ class TicketServiceAvailableActionsTest {
     }
 
     @Test
-    void inProgressOwnerCanSeeCompleteAction() {
+    void availableActionsOmitsFixedActionMapForInProgressOwner() {
         Ticket ticket = inProgressTicket("tech-1");
         when(ticketRepository.findById(10L)).thenReturn(Optional.of(ticket));
-        when(workflowService.isTransitionAllowed(AccessKey.COMPLETE_TICKET, TicketStatus.IN_PROGRESS, TicketStatus.COMPLETED))
-                .thenReturn(true);
 
         TicketAvailableActionsResponse response = ticketService.getAvailableActions(10L, "tech-1", "TECHNICIAN");
 
-        assertThat(response.actions().get(AccessKey.COMPLETE_TICKET).available()).isTrue();
-    }
-
-    @Test
-    void inProgressAdminCanSeeCancelActionWhenTransitionIsAllowed() {
-        Ticket ticket = inProgressTicket("tech-1");
-        when(ticketRepository.findById(10L)).thenReturn(Optional.of(ticket));
-        when(workflowService.isTransitionAllowed(AccessKey.CANCEL_TICKET, TicketStatus.IN_PROGRESS, TicketStatus.CANCELLED))
-                .thenReturn(true);
-
-        TicketAvailableActionsResponse response = ticketService.getAvailableActions(10L, "admin-1", "ADMIN");
-
-        assertThat(response.actions().get(AccessKey.CANCEL_TICKET).available()).isTrue();
+        assertThat(response.ticketId()).isEqualTo(10L);
+        assertThat(response.dynamicActions()).isEmpty();
     }
 
     @Test
@@ -215,14 +202,13 @@ class TicketServiceAvailableActionsTest {
 
         TicketAvailableActionsResponse response = ticketService.getAvailableActions(20L, "admin-1", "SUPER_ADMIN");
 
-        assertThat(response.actions().get(AccessKey.PICK_TICKET).available()).isFalse();
         assertThat(response.dynamicActions())
                 .extracting(actionResponse -> actionResponse.actionKey())
                 .containsExactly("START_REPAIR_WORK");
     }
 
     @Test
-    void dbConfiguredDefaultCategoryKeepsFixedPickActionAvailable() {
+    void dbConfiguredDefaultCategoryDoesNotReturnFixedPickActionInAvailableActions() {
         WorkflowStatus newStatus = systemStatus(1L, "NEW", TicketStatus.NEW, false);
         TicketCategoryConfig category = new TicketCategoryConfig();
         ReflectionTestUtils.setField(category, "id", 5L);
@@ -238,13 +224,11 @@ class TicketServiceAvailableActionsTest {
         ticket.setCategoryRecord(category);
 
         when(ticketRepository.findById(21L)).thenReturn(Optional.of(ticket));
-        when(workflowService.isTransitionAllowedForCategory(AccessKey.PICK_TICKET, TicketStatus.NEW, TicketStatus.PICKED, 5L))
-                .thenReturn(true);
 
         TicketAvailableActionsResponse response = ticketService.getAvailableActions(21L, "admin-1", "SUPER_ADMIN");
 
-        assertThat(response.actions().get(AccessKey.PICK_TICKET).available()).isTrue();
-        assertThat(response.actions().get(AccessKey.PICK_TICKET).reasonCode()).isNull();
+        assertThat(response.ticketId()).isEqualTo(21L);
+        assertThat(response.dynamicActions()).isEmpty();
     }
 
     @Test

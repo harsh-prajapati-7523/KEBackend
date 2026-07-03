@@ -61,7 +61,6 @@ import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -85,7 +84,6 @@ public class TicketService {
     private static final String OWNER_REQUIRED = "OWNER_REQUIRED";
     private static final String ADMIN_REQUIRED = "ADMIN_REQUIRED";
     private static final String TERMINAL_STATUS = "TERMINAL_STATUS";
-    private static final String FIXED_ACTIONS_DISABLED = "FIXED_ACTIONS_DISABLED";
     private static final List<String> PROTECTED_FIXED_ACTION_KEYS = List.of(
             AccessKey.PICK_TICKET.name(),
             AccessKey.START_WORK.name(),
@@ -188,29 +186,10 @@ public class TicketService {
                         "Ticket not found"
                 ));
 
-        Map<AccessKey, TicketActionAvailabilityResponse> actions = new EnumMap<>(AccessKey.class);
-        TicketCategoryConfig category = resolveTicketCategory(ticket);
-        boolean dbWorkflowMode = isDbWorkflowMode(category);
-        boolean fixedActionsEnabled = category == null || category.isFixedActionsEnabled();
-        if (!dbWorkflowMode || fixedActionsEnabled) {
-            actions.put(AccessKey.PICK_TICKET, evaluatePickAvailability(ticket, employeeId));
-            actions.put(AccessKey.START_WORK, evaluateStartWorkAvailability(ticket, employeeId));
-            actions.put(AccessKey.COMPLETE_TICKET, evaluateCompleteAvailability(ticket, employeeId, role));
-            actions.put(AccessKey.CANCEL_TICKET, evaluateCancelAvailability(ticket, employeeId, role));
-        } else {
-            TicketActionAvailabilityResponse fixedDisabled = unavailable(
-                    FIXED_ACTIONS_DISABLED,
-                    "Fixed workflow actions are disabled for this ticket category."
-            );
-            actions.put(AccessKey.PICK_TICKET, fixedDisabled);
-            actions.put(AccessKey.START_WORK, fixedDisabled);
-            actions.put(AccessKey.COMPLETE_TICKET, fixedDisabled);
-            actions.put(AccessKey.CANCEL_TICKET, fixedDisabled);
-        }
         List<TicketDynamicActionResponse> dynamicActions = evaluateDynamicActions(ticket, employeeId);
 
         log.info("event=ticket_available_actions_returned employeeId={} ticketId={}", employeeId, ticketId);
-        return new TicketAvailableActionsResponse(ticket.getId(), actions, dynamicActions);
+        return new TicketAvailableActionsResponse(ticket.getId(), dynamicActions);
     }
 
     @Transactional
