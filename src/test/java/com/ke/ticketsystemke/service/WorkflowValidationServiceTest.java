@@ -158,6 +158,44 @@ class WorkflowValidationServiceTest {
     }
 
     @Test
+    void validationAcceptsCustomNewBehaviorBucketStartWhenCategoryRuleIsEnabled() {
+        TicketCategoryConfig category = category();
+        WorkflowAction startAction = action("START_SIMPLE_WORK");
+        WorkflowAction completeAction = action("COMPLETE_SIMPLE_WORK");
+        WorkflowStatus customNew = status(1L, "CUSTOM_NEW", TicketStatus.NEW, false);
+        WorkflowStatus customInProgress = status(2L, "CUSTOM_IN_PROGRESS", TicketStatus.IN_PROGRESS, false);
+        WorkflowStatus customDone = status(3L, "CUSTOM_DONE", TicketStatus.COMPLETED, true);
+        WorkflowTransition startTransition = transition(100L, "START_SIMPLE_WORK", customNew, customInProgress);
+        WorkflowTransition completeTransition = transition(101L, "COMPLETE_SIMPLE_WORK", customInProgress, customDone);
+        Role superAdmin = role(1L, "SUPER_ADMIN");
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(startTransition, completeTransition));
+        when(workflowActionRepository.findByActionKey("START_SIMPLE_WORK")).thenReturn(Optional.of(startAction));
+        when(workflowActionRepository.findByActionKey("COMPLETE_SIMPLE_WORK")).thenReturn(Optional.of(completeAction));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(true);
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(101L)).thenReturn(true);
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(100L, 3L))
+                .thenReturn(true);
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(101L, 3L))
+                .thenReturn(true);
+        when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(100L)).thenReturn(List.of());
+        when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(101L)).thenReturn(List.of());
+        when(roleRepository.findAll()).thenReturn(List.of(superAdmin));
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isTrue();
+        assertThat(response.blockingIssues()).isEmpty();
+        assertThat(response.warnings())
+                .hasSize(2)
+                .allMatch(issue -> "MISSING_ROLE_TRANSITION_SCOPE_COVERAGE".equals(issue.code()));
+        assertThat(response.warnings())
+                .extracting("transitionId")
+                .containsExactlyInAnyOrder(100L, 101L);
+    }
+
+    @Test
     void validationReportsStaleTransitionTargetBehavior() {
         TicketCategoryConfig category = category();
         WorkflowAction action = action();
@@ -231,19 +269,27 @@ class WorkflowValidationServiceTest {
     }
 
     private WorkflowAction action() {
+        return action("CUSTOM_FLOW");
+    }
+
+    private WorkflowAction action(String actionKey) {
         WorkflowAction action = new WorkflowAction();
-        action.setActionKey("CUSTOM_FLOW");
-        action.setDisplayName("Custom Flow");
-        action.setButtonLabel("Custom Flow");
+        action.setActionKey(actionKey);
+        action.setDisplayName(actionKey);
+        action.setButtonLabel(actionKey);
         action.setActive(true);
         return action;
     }
 
     private WorkflowTransition transition(Long id, WorkflowStatus fromStatus, WorkflowStatus toStatus) {
+        return transition(id, "CUSTOM_FLOW", fromStatus, toStatus);
+    }
+
+    private WorkflowTransition transition(Long id, String actionKey, WorkflowStatus fromStatus, WorkflowStatus toStatus) {
         WorkflowTransition transition = new WorkflowTransition();
         ReflectionTestUtils.setField(transition, "id", id);
-        transition.setActionKey("CUSTOM_FLOW");
-        transition.setDisplayName("Custom Flow");
+        transition.setActionKey(actionKey);
+        transition.setDisplayName(actionKey);
         transition.setFromStatus(fromStatus.getBehaviorBucket());
         transition.setToStatus(toStatus.getBehaviorBucket());
         transition.setFromStatusRecord(fromStatus);
