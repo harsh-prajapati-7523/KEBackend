@@ -99,8 +99,8 @@ public class GenericTransitionExecutorService {
                     true,
                     action.getActionKey(),
                     action.getDisplayName(),
-                    transition.getFromStatus().name(),
-                    transition.getToStatus().name(),
+                    plan.fromStatusBehaviorBucket().name(),
+                    plan.toStatusBehaviorBucket().name(),
                     fromStatus.getDisplayName(),
                     toStatus.getDisplayName(),
                     action.isRequiresComment(),
@@ -245,7 +245,8 @@ public class GenericTransitionExecutorService {
         validateRepairWorkflowEnabled(transition);
         validateTransitionActive(transition);
         validateCurrentStatus(ticket, currentStatus, transition);
-        TicketStatus toStatusBehaviorBucket = resolveTargetStatusBehaviorBucket(toStatus, transition.getToStatus());
+        TicketStatus fromStatusBehaviorBucket = resolveTransitionFromStatus(transition, fromStatus);
+        TicketStatus toStatusBehaviorBucket = resolveTargetStatusBehaviorBucket(toStatus, resolveTransitionToStatus(transition, toStatus));
         validateAction(action);
         accessService.requireAllowed(employeeId, action.getActionKey());
         validateTerminalProtection(currentStatus);
@@ -259,6 +260,7 @@ public class GenericTransitionExecutorService {
                 action,
                 fromStatus,
                 toStatus,
+                fromStatusBehaviorBucket,
                 toStatusBehaviorBucket,
                 currentStatus,
                 employeeId,
@@ -330,10 +332,11 @@ public class GenericTransitionExecutorService {
             ResolvedTicketStatus currentStatus,
             WorkflowTransition transition
     ) {
-        if (ticket.getStatus() == null || ticket.getStatus() != transition.getFromStatus()) {
+        TicketStatus transitionFromStatus = resolveTransitionFromStatus(transition, transition.getFromStatusRecord());
+        if (ticket.getStatus() == null || ticket.getStatus() != transitionFromStatus) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket is not in the transition source status");
         }
-        if (currentStatus.behaviorBucket() == null || currentStatus.behaviorBucket() != transition.getFromStatus()) {
+        if (currentStatus.behaviorBucket() == null || currentStatus.behaviorBucket() != transitionFromStatus) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket effective status does not match transition source status");
         }
         if (Boolean.FALSE.equals(currentStatus.actualStatusActive())) {
@@ -357,6 +360,18 @@ public class GenericTransitionExecutorService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target workflow status is not supported for generic execution");
         }
         return executability.behaviorBucket();
+    }
+
+    private TicketStatus resolveTransitionFromStatus(WorkflowTransition transition, WorkflowStatus fromStatus) {
+        return fromStatus != null && fromStatus.getBehaviorBucket() != null
+                ? fromStatus.getBehaviorBucket()
+                : transition.getFromStatus();
+    }
+
+    private TicketStatus resolveTransitionToStatus(WorkflowTransition transition, WorkflowStatus toStatus) {
+        return toStatus != null && toStatus.getBehaviorBucket() != null
+                ? toStatus.getBehaviorBucket()
+                : transition.getToStatus();
     }
 
     private void validateAction(WorkflowAction action) {
@@ -432,6 +447,7 @@ public class GenericTransitionExecutorService {
             WorkflowAction action,
             WorkflowStatus fromStatus,
             WorkflowStatus toStatus,
+            TicketStatus fromStatusBehaviorBucket,
             TicketStatus toStatusBehaviorBucket,
             ResolvedTicketStatus currentStatus,
             String executedByEmployeeId,

@@ -10,6 +10,7 @@ import com.ke.ticketsystemke.entity.TicketStatus;
 import com.ke.ticketsystemke.entity.WorkflowStatus;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.WorkflowStatusRepository;
+import com.ke.ticketsystemke.repository.WorkflowTransitionRepository;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.slf4j.Logger;
@@ -36,13 +37,16 @@ public class WorkflowStatusService {
             .collect(Collectors.toUnmodifiableSet());
 
     private final WorkflowStatusRepository workflowStatusRepository;
+    private final WorkflowTransitionRepository workflowTransitionRepository;
     private final EmployeeRepository employeeRepository;
 
     public WorkflowStatusService(
             WorkflowStatusRepository workflowStatusRepository,
+            WorkflowTransitionRepository workflowTransitionRepository,
             EmployeeRepository employeeRepository
     ) {
         this.workflowStatusRepository = workflowStatusRepository;
+        this.workflowTransitionRepository = workflowTransitionRepository;
         this.employeeRepository = employeeRepository;
     }
 
@@ -129,6 +133,7 @@ public class WorkflowStatusService {
         status.setUpdatedByEmployee(resolveEmployee(employeeId));
 
         WorkflowStatus saved = workflowStatusRepository.save(status);
+        synchronizeLinkedTransitions(saved);
         log.info("event=workflow_status_updated employeeId={} statusId={} statusKey={} result=updated",
                 employeeId, saved.getId(), saved.getStatusKey());
         return WorkflowStatusResponse.from(saved);
@@ -218,5 +223,29 @@ public class WorkflowStatusService {
         String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
         return employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
+    }
+
+    private void synchronizeLinkedTransitions(WorkflowStatus status) {
+        if (status.getId() == null || status.getBehaviorBucket() == null) {
+            return;
+        }
+
+        List<com.ke.ticketsystemke.entity.WorkflowTransition> transitions =
+                workflowTransitionRepository.findByFromStatusRecord_IdOrToStatusRecord_Id(status.getId(), status.getId());
+        for (com.ke.ticketsystemke.entity.WorkflowTransition transition : transitions) {
+            if (transition.getFromStatusRecord() != null
+                    && status.getId().equals(transition.getFromStatusRecord().getId())) {
+                transition.setFromStatus(status.getBehaviorBucket());
+            }
+            if (transition.getToStatusRecord() != null
+                    && status.getId().equals(transition.getToStatusRecord().getId())) {
+                transition.setToStatus(status.getBehaviorBucket());
+            }
+        }
+        workflowTransitionRepository.saveAll(transitions);
+        if (!transitions.isEmpty()) {
+            log.info("event=workflow_status_transition_behaviors_synchronized statusId={} statusKey={} transitionCount={}",
+                    status.getId(), status.getStatusKey(), transitions.size());
+        }
     }
 }

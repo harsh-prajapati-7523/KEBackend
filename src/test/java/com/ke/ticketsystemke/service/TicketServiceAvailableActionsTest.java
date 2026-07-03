@@ -193,6 +193,7 @@ class TicketServiceAvailableActionsTest {
                         action,
                         newStatus,
                         inProgressStatus,
+                        TicketStatus.NEW,
                         TicketStatus.IN_PROGRESS,
                         currentStatus,
                         "admin-1",

@@ -171,6 +171,15 @@ public class WorkflowValidationService {
         }
         if (transition.getFromStatusRecord() == null || transition.getToStatusRecord() == null) {
             addIssue(issues, "MISSING_STATUS_REFERENCE", "Transition references a missing workflow status", transition.getId());
+            return;
+        }
+        if (transition.getFromStatusRecord().getBehaviorBucket() != null
+                && transition.getFromStatus() != transition.getFromStatusRecord().getBehaviorBucket()) {
+            addIssue(issues, "STALE_SOURCE_STATUS_BEHAVIOR", "Transition source behavior is out of sync with source workflow status", transition.getId());
+        }
+        if (transition.getToStatusRecord().getBehaviorBucket() != null
+                && transition.getToStatus() != transition.getToStatusRecord().getBehaviorBucket()) {
+            addIssue(issues, "STALE_TARGET_STATUS_BEHAVIOR", "Transition target behavior is out of sync with target workflow status", transition.getId());
         }
     }
 

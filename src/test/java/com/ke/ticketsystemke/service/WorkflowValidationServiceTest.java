@@ -158,6 +158,32 @@ class WorkflowValidationServiceTest {
     }
 
     @Test
+    void validationReportsStaleTransitionTargetBehavior() {
+        TicketCategoryConfig category = category();
+        WorkflowAction action = action();
+        WorkflowTransition transition = transition(
+                100L,
+                status(1L, "CHANGRED", TicketStatus.IN_PROGRESS, false),
+                status(2L, "DELIVERD", TicketStatus.COMPLETED, true)
+        );
+        transition.setToStatus(TicketStatus.IN_PROGRESS);
+        Role superAdmin = role(1L, "SUPER_ADMIN");
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(transition));
+        when(workflowActionRepository.findByActionKey("CUSTOM_FLOW")).thenReturn(Optional.of(action));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(false);
+        when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(100L)).thenReturn(List.of());
+        when(roleRepository.findAll()).thenReturn(List.of(superAdmin));
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isFalse();
+        assertThat(response.blockingIssues())
+                .anyMatch(issue -> "STALE_TARGET_STATUS_BEHAVIOR".equals(issue.code()));
+    }
+
+    @Test
     void validationAcceptsProtectedFixedTransitionsWhenExplicitlyEnabledForCategory() {
         TicketCategoryConfig category = category();
         WorkflowAction action = action();
