@@ -2,7 +2,6 @@ package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
-import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.entity.TicketStatus;
@@ -61,12 +60,6 @@ class TicketServiceAvailableActionsTest {
     private TicketChargeService ticketChargeService;
 
     @Mock
-    private WorkflowService workflowService;
-
-    @Mock
-    private AccessService accessService;
-
-    @Mock
     private WorkflowStatusRepository workflowStatusRepository;
 
     @Mock
@@ -99,8 +92,6 @@ class TicketServiceAvailableActionsTest {
                 dropdownOptionRepository,
                 ticketDynamicValueRepository,
                 ticketChargeService,
-                workflowService,
-                accessService,
                 workflowStatusRepository,
                 workflowTransitionRepository,
                 workflowTransitionCategoryRuleRepository,
@@ -110,10 +101,6 @@ class TicketServiceAvailableActionsTest {
                 repairWorkflowFeatureFlag
         );
 
-        lenient().when(accessService.isAllowed(eq("tech-1"), any(AccessKey.class))).thenReturn(true);
-        lenient().when(accessService.isAllowed(eq("admin-1"), any(AccessKey.class))).thenReturn(true);
-        lenient().when(workflowService.isTransitionAllowed(any(AccessKey.class), any(TicketStatus.class), any(TicketStatus.class)))
-                .thenReturn(false);
         lenient().when(workflowTransitionRepository.findByFromStatusAndActiveTrueOrderBySortOrderAscIdAsc(TicketStatus.IN_PROGRESS))
                 .thenReturn(List.of());
     }

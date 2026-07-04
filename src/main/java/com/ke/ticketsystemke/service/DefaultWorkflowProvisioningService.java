@@ -1,7 +1,6 @@
 package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.config.CacheNames;
-import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.AccessKeyMetadata;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.Role;
@@ -27,7 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,26 +35,17 @@ public class DefaultWorkflowProvisioningService {
 
     private static final String ACCESS_CATEGORY = "Workflow Actions";
     private static final List<DefaultStatus> DEFAULT_STATUSES = List.of(
-            new DefaultStatus(TicketStatus.NEW, "New", TicketStatus.NEW, false, 10),
-            new DefaultStatus(TicketStatus.PICKED, "Picked", TicketStatus.PICKED, false, 20),
-            new DefaultStatus(TicketStatus.IN_PROGRESS, "In Progress", TicketStatus.IN_PROGRESS, false, 30),
-            new DefaultStatus(TicketStatus.COMPLETED, "Completed", TicketStatus.COMPLETED, true, 40),
-            new DefaultStatus(TicketStatus.CANCELLED, "Cancelled", TicketStatus.CANCELLED, true, 50)
+            new DefaultStatus("DEFAULT_NEW", "Default New", TicketStatus.NEW, false, 10),
+            new DefaultStatus("DEFAULT_IN_PROGRESS", "Default In Progress", TicketStatus.IN_PROGRESS, false, 20),
+            new DefaultStatus("DEFAULT_DONE", "Default Done", TicketStatus.COMPLETED, true, 30)
     );
     private static final List<DefaultAction> DEFAULT_ACTIONS = List.of(
-            new DefaultAction(AccessKey.PICK_TICKET, "Pick Ticket", 10),
-            new DefaultAction(AccessKey.START_WORK, "Start Work", 20),
-            new DefaultAction(AccessKey.COMPLETE_TICKET, "Complete Ticket", 30),
-            new DefaultAction(AccessKey.CANCEL_TICKET, "Cancel Ticket", 40)
+            new DefaultAction("DEFAULT_START", "Start", 10),
+            new DefaultAction("DEFAULT_FINISH", "Finish", 20)
     );
     private static final List<DefaultTransition> DEFAULT_TRANSITIONS = List.of(
-            new DefaultTransition(AccessKey.PICK_TICKET, "Pick Ticket", TicketStatus.NEW, TicketStatus.PICKED, 10),
-            new DefaultTransition(AccessKey.PICK_TICKET, "Pick Ticket", TicketStatus.PICKED, TicketStatus.PICKED, 20),
-            new DefaultTransition(AccessKey.START_WORK, "Start Work", TicketStatus.PICKED, TicketStatus.IN_PROGRESS, 30),
-            new DefaultTransition(AccessKey.COMPLETE_TICKET, "Complete Ticket", TicketStatus.IN_PROGRESS, TicketStatus.COMPLETED, 40),
-            new DefaultTransition(AccessKey.CANCEL_TICKET, "Cancel Ticket", TicketStatus.NEW, TicketStatus.CANCELLED, 50),
-            new DefaultTransition(AccessKey.CANCEL_TICKET, "Cancel Ticket", TicketStatus.PICKED, TicketStatus.CANCELLED, 60),
-            new DefaultTransition(AccessKey.CANCEL_TICKET, "Cancel Ticket", TicketStatus.IN_PROGRESS, TicketStatus.CANCELLED, 70)
+            new DefaultTransition("DEFAULT_START", "Start", "DEFAULT_NEW", "DEFAULT_IN_PROGRESS", 10),
+            new DefaultTransition("DEFAULT_FINISH", "Finish", "DEFAULT_IN_PROGRESS", "DEFAULT_DONE", 20)
     );
 
     private final WorkflowStatusRepository workflowStatusRepository;
@@ -100,9 +90,9 @@ public class DefaultWorkflowProvisioningService {
             CacheNames.TICKET_CATEGORIES
     }, allEntries = true)
     public void provisionAndActivate(TicketCategoryConfig category, Employee actor) {
-        Map<TicketStatus, WorkflowStatus> statusesByBucket = ensureStatuses(actor);
+        Map<String, WorkflowStatus> statusesByKey = ensureStatuses(actor);
         ensureActions(actor);
-        List<WorkflowTransition> transitions = ensureTransitions(statusesByBucket, actor);
+        List<WorkflowTransition> transitions = ensureTransitions(statusesByKey, actor);
         List<Role> activeRoles = roleRepository.findAllByOrderByRoleKeyAsc()
                 .stream()
                 .filter(Role::isActive)
@@ -117,47 +107,47 @@ public class DefaultWorkflowProvisioningService {
         workflowValidationService.requireValidCategoryWorkflow(category.getId());
         category.setWorkflowMode(WorkflowMode.DB_CONFIGURED);
         category.setDbWorkflowEnabled(true);
-        category.setFixedActionsEnabled(true);
+        category.setFixedActionsEnabled(false);
         category.setWorkflowModeUpdatedAt(Instant.now());
         category.setWorkflowModeUpdatedByEmployee(actor);
     }
 
-    private Map<TicketStatus, WorkflowStatus> ensureStatuses(Employee actor) {
-        Map<TicketStatus, WorkflowStatus> statusesByBucket = new EnumMap<>(TicketStatus.class);
+    private Map<String, WorkflowStatus> ensureStatuses(Employee actor) {
+        Map<String, WorkflowStatus> statusesByKey = new LinkedHashMap<>();
         for (DefaultStatus defaultStatus : DEFAULT_STATUSES) {
-            WorkflowStatus status = workflowStatusRepository.findByStatusKey(defaultStatus.key().name())
+            WorkflowStatus status = workflowStatusRepository.findByStatusKey(defaultStatus.key())
                     .orElseGet(() -> {
                         WorkflowStatus created = new WorkflowStatus();
-                        created.setStatusKey(defaultStatus.key().name());
+                        created.setStatusKey(defaultStatus.key());
                         created.setDisplayName(defaultStatus.displayName());
-                        created.setSystemStatus(true);
-                        created.setProtectedStatus(true);
                         return created;
                     });
             status.setActive(true);
+            status.setSystemStatus(false);
+            status.setProtectedStatus(false);
             status.setTerminal(defaultStatus.terminal());
             status.setBehaviorBucket(defaultStatus.behaviorBucket());
             status.setSortOrder(defaultStatus.sortOrder());
             status.setUpdatedByEmployee(actor);
-            statusesByBucket.put(defaultStatus.key(), workflowStatusRepository.save(status));
+            statusesByKey.put(defaultStatus.key(), workflowStatusRepository.save(status));
         }
-        return statusesByBucket;
+        return statusesByKey;
     }
 
     private void ensureActions(Employee actor) {
         for (DefaultAction defaultAction : DEFAULT_ACTIONS) {
-            WorkflowAction action = workflowActionRepository.findByActionKey(defaultAction.key().name())
+            WorkflowAction action = workflowActionRepository.findByActionKey(defaultAction.key())
                     .orElseGet(() -> {
                         WorkflowAction created = new WorkflowAction();
-                        created.setActionKey(defaultAction.key().name());
+                        created.setActionKey(defaultAction.key());
                         created.setDisplayName(defaultAction.displayName());
                         created.setButtonLabel(defaultAction.displayName());
-                        created.setDescription("Default workflow action.");
-                        created.setSystemAction(true);
-                        created.setProtectedAction(true);
+                        created.setDescription("Default generic workflow action.");
                         return created;
                     });
             action.setActive(true);
+            action.setSystemAction(false);
+            action.setProtectedAction(false);
             action.setSortOrder(defaultAction.sortOrder());
             action.setRequiresComment(false);
             action.setConfirmationRequired(false);
@@ -168,56 +158,56 @@ public class DefaultWorkflowProvisioningService {
     }
 
     private void ensureAccessMetadata(DefaultAction defaultAction, Employee actor) {
-        AccessKeyMetadata metadata = accessKeyMetadataRepository.findByAccessKey(defaultAction.key().name())
+        AccessKeyMetadata metadata = accessKeyMetadataRepository.findByAccessKey(defaultAction.key())
                 .orElseGet(() -> {
                     AccessKeyMetadata created = new AccessKeyMetadata();
-                    created.setAccessKey(defaultAction.key().name());
+                    created.setAccessKey(defaultAction.key());
                     return created;
                 });
         metadata.setDisplayName(defaultAction.displayName());
-        metadata.setDescription("Default workflow action.");
+        metadata.setDescription("Default generic workflow action.");
         metadata.setCategory(ACCESS_CATEGORY);
         metadata.setActive(true);
-        metadata.setSystemKey(true);
-        metadata.setProtectedKey(true);
+        metadata.setSystemKey(false);
+        metadata.setProtectedKey(false);
         metadata.setSortOrder(defaultAction.sortOrder());
         metadata.setUpdatedByEmployee(actor);
         accessKeyMetadataRepository.save(metadata);
     }
 
     private List<WorkflowTransition> ensureTransitions(
-            Map<TicketStatus, WorkflowStatus> statusesByBucket,
+            Map<String, WorkflowStatus> statusesByKey,
             Employee actor
     ) {
         return DEFAULT_TRANSITIONS.stream()
-                .map(defaultTransition -> ensureTransition(defaultTransition, statusesByBucket, actor))
+                .map(defaultTransition -> ensureTransition(defaultTransition, statusesByKey, actor))
                 .toList();
     }
 
     private WorkflowTransition ensureTransition(
             DefaultTransition defaultTransition,
-            Map<TicketStatus, WorkflowStatus> statusesByBucket,
+            Map<String, WorkflowStatus> statusesByKey,
             Employee actor
     ) {
-        WorkflowStatus fromStatus = statusesByBucket.get(defaultTransition.fromStatus());
-        WorkflowStatus toStatus = statusesByBucket.get(defaultTransition.toStatus());
+        WorkflowStatus fromStatus = statusesByKey.get(defaultTransition.fromStatusKey());
+        WorkflowStatus toStatus = statusesByKey.get(defaultTransition.toStatusKey());
         WorkflowTransition transition = workflowTransitionRepository
                 .findByActionKeyAndFromStatusRecord_IdAndToStatusRecord_Id(
-                        defaultTransition.action().name(),
+                        defaultTransition.actionKey(),
                         fromStatus.getId(),
                         toStatus.getId()
                 )
                 .orElseGet(WorkflowTransition::new);
-        transition.setActionKey(defaultTransition.action());
+        transition.setActionKey(defaultTransition.actionKey());
         transition.setDisplayName(defaultTransition.displayName());
-        transition.setFromStatus(defaultTransition.fromStatus());
-        transition.setToStatus(defaultTransition.toStatus());
+        transition.setFromStatus(fromStatus.getBehaviorBucket());
+        transition.setToStatus(toStatus.getBehaviorBucket());
         transition.setFromStatusRecord(fromStatus);
         transition.setToStatusRecord(toStatus);
         transition.setActive(true);
         transition.setSortOrder(defaultTransition.sortOrder());
-        transition.setSystemTransition(true);
-        transition.setProtectedTransition(true);
+        transition.setSystemTransition(false);
+        transition.setProtectedTransition(false);
         transition.setUpdatedByEmployee(actor);
         return workflowTransitionRepository.save(transition);
     }
@@ -266,11 +256,11 @@ public class DefaultWorkflowProvisioningService {
         for (Role role : activeRoles) {
             for (DefaultAction defaultAction : DEFAULT_ACTIONS) {
                 RoleAccessRule rule = roleAccessRuleRepository
-                        .findByRoleIdAndAccessKey(role.getId(), defaultAction.key().name())
+                        .findByRoleIdAndAccessKey(role.getId(), defaultAction.key())
                         .orElseGet(() -> {
                             RoleAccessRule created = new RoleAccessRule();
                             created.setRole(role);
-                            created.setAccessKey(defaultAction.key().name());
+                            created.setAccessKey(defaultAction.key());
                             return created;
                         });
                 rule.setAllowed(true);
@@ -281,7 +271,7 @@ public class DefaultWorkflowProvisioningService {
     }
 
     private record DefaultStatus(
-            TicketStatus key,
+            String key,
             String displayName,
             TicketStatus behaviorBucket,
             boolean terminal,
@@ -290,17 +280,17 @@ public class DefaultWorkflowProvisioningService {
     }
 
     private record DefaultAction(
-            AccessKey key,
+            String key,
             String displayName,
             Integer sortOrder
     ) {
     }
 
     private record DefaultTransition(
-            AccessKey action,
+            String actionKey,
             String displayName,
-            TicketStatus fromStatus,
-            TicketStatus toStatus,
+            String fromStatusKey,
+            String toStatusKey,
             Integer sortOrder
     ) {
     }

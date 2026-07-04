@@ -133,18 +133,6 @@ public class SecurityConfig {
                         .authenticated()
 
                         .requestMatchers(
-                                HttpMethod.POST,
-                                "/volt/tickets/*/pick",
-                                "/volt/tickets/*/start-work",
-                                "/volt/tickets/*/complete")
-                        .authenticated()
-
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/volt/tickets/*/cancel")
-                        .authenticated()
-
-                        .requestMatchers(
                                 HttpMethod.GET,
                                 "/volt/tickets/*/charges")
                         .authenticated()

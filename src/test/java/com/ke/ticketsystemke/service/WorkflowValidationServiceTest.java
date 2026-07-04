@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -120,6 +121,25 @@ class WorkflowValidationServiceTest {
                 .anyMatch(issue -> "MISSING_TERMINAL_COMPLETION_PATH".equals(issue.code()));
         assertThat(response.warnings())
                 .anyMatch(issue -> "MISSING_ROLE_TRANSITION_SCOPE_COVERAGE".equals(issue.code()));
+    }
+
+    @Test
+    void requireValidCategoryWorkflowIncludesPrimaryBlockingIssue() {
+        TicketCategoryConfig category = category();
+        WorkflowAction action = action();
+        WorkflowTransition transition = transition(100L, status(1L, "NEW", TicketStatus.NEW, false), status(2L, "IN_PROGRESS", TicketStatus.IN_PROGRESS, false));
+        Role superAdmin = role(1L, "SUPER_ADMIN");
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(transition));
+        when(workflowActionRepository.findByActionKey("CUSTOM_FLOW")).thenReturn(Optional.of(action));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(false);
+        when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(100L)).thenReturn(List.of());
+        when(roleRepository.findAll()).thenReturn(List.of(superAdmin));
+
+        assertThatThrownBy(() -> workflowValidationService.requireValidCategoryWorkflow(3L))
+                .hasMessageContaining("Workflow invalid: MISSING_TERMINAL_COMPLETION_PATH")
+                .hasMessageContaining("Workflow has no reachable terminal completion path");
     }
 
     @Test

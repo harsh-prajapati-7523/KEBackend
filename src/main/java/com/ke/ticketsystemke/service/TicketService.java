@@ -1,13 +1,10 @@
 package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.AssignTicketRequest;
-import com.ke.ticketsystemke.dto.CancelTicketRequest;
-import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketDynamicValueRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
 import com.ke.ticketsystemke.dto.CustomerHistoryTicketResponse;
-import com.ke.ticketsystemke.dto.TicketActionAvailabilityResponse;
 import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicActionResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValueResponse;
@@ -78,12 +75,6 @@ public class TicketService {
     private static final int DYNAMIC_TEXTAREA_MAX_LENGTH = 1000;
     private static final int DEFAULT_TICKET_READ_SIZE = 100;
     private static final int MAX_TICKET_READ_SIZE = 100;
-    private static final String ROLE_ACCESS_DENIED = "ROLE_ACCESS_DENIED";
-    private static final String WORKFLOW_TRANSITION_INACTIVE = "WORKFLOW_TRANSITION_INACTIVE";
-    private static final String STATUS_NOT_ALLOWED = "STATUS_NOT_ALLOWED";
-    private static final String OWNER_REQUIRED = "OWNER_REQUIRED";
-    private static final String ADMIN_REQUIRED = "ADMIN_REQUIRED";
-    private static final String TERMINAL_STATUS = "TERMINAL_STATUS";
     private static final List<String> PROTECTED_FIXED_ACTION_KEYS = List.of(
             AccessKey.PICK_TICKET.name(),
             AccessKey.START_WORK.name(),
@@ -98,8 +89,6 @@ public class TicketService {
     private final DropdownOptionRepository dropdownOptionRepository;
     private final TicketDynamicValueRepository ticketDynamicValueRepository;
     private final TicketChargeService ticketChargeService;
-    private final WorkflowService workflowService;
-    private final AccessService accessService;
     private final WorkflowStatusRepository workflowStatusRepository;
     private final WorkflowTransitionRepository workflowTransitionRepository;
     private final WorkflowTransitionCategoryRuleRepository workflowTransitionCategoryRuleRepository;
@@ -116,8 +105,6 @@ public class TicketService {
             DropdownOptionRepository dropdownOptionRepository,
             TicketDynamicValueRepository ticketDynamicValueRepository,
             TicketChargeService ticketChargeService,
-            WorkflowService workflowService,
-            AccessService accessService,
             WorkflowStatusRepository workflowStatusRepository,
             WorkflowTransitionRepository workflowTransitionRepository,
             WorkflowTransitionCategoryRuleRepository workflowTransitionCategoryRuleRepository,
@@ -133,8 +120,6 @@ public class TicketService {
         this.dropdownOptionRepository = dropdownOptionRepository;
         this.ticketDynamicValueRepository = ticketDynamicValueRepository;
         this.ticketChargeService = ticketChargeService;
-        this.workflowService = workflowService;
-        this.accessService = accessService;
         this.workflowStatusRepository = workflowStatusRepository;
         this.workflowTransitionRepository = workflowTransitionRepository;
         this.workflowTransitionCategoryRuleRepository = workflowTransitionCategoryRuleRepository;
@@ -190,215 +175,6 @@ public class TicketService {
 
         log.info("event=ticket_available_actions_returned employeeId={} ticketId={}", employeeId, ticketId);
         return new TicketAvailableActionsResponse(ticket.getId(), dynamicActions);
-    }
-
-    @Transactional
-    public TicketResponse pickTicket(
-            Long ticketId,
-            String employeeId
-    ) {
-        Ticket ticket = repository.findById(ticketId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Ticket not found"
-                ));
-
-        TicketStatus status = ticket.getStatus();
-        if (status == TicketStatus.NEW || status == TicketStatus.PICKED) {
-            workflowService.requireTransitionAllowed(AccessKey.PICK_TICKET, status, TicketStatus.PICKED);
-            String previousOwner = ticket.getPickedByEmployeeId();
-            Long fromStatusId = resolveStatusRecordId(ticket);
-            WorkflowStatus toStatusRecord = resolveWorkflowStatusForTicketStatus(TicketStatus.PICKED);
-            ticket.setStatus(TicketStatus.PICKED);
-            ticket.setStatusRecord(toStatusRecord);
-            ticket.setPickedByEmployeeId(employeeId);
-            Ticket saved = repository.save(ticket);
-            ticketWorkflowHistoryService.recordSuccessfulFixedAction(
-                    saved,
-                    AccessKey.PICK_TICKET,
-                    status,
-                    TicketStatus.PICKED,
-                    fromStatusId,
-                    resolveStatusRecordId(toStatusRecord),
-                    employeeId,
-                    previousOwner,
-                    employeeId,
-                    null,
-                    null
-            );
-            TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
-            log.info("event=ticket_picked ticketId={} previousOwner={} newOwner={}", ticketId, previousOwner, employeeId);
-            return resp;
-        }
-
-        log.warn("event=invalid_status_transition ticketId={} status={} attemptedAction=pick", ticketId, status);
-        throw new ResponseStatusException(
-            HttpStatus.BAD_REQUEST,
-            "Ticket cannot be picked in its current status"
-        );
-    }
-
-    @Transactional
-    public TicketResponse startWork(
-            Long ticketId,
-            String employeeId
-    ) {
-        Ticket ticket = repository.findById(ticketId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Ticket not found"
-                ));
-
-        if (ticket.getStatus() == TicketStatus.PICKED) {
-            workflowService.requireTransitionAllowed(AccessKey.START_WORK, TicketStatus.PICKED, TicketStatus.IN_PROGRESS);
-            Long fromStatusId = resolveStatusRecordId(ticket);
-            WorkflowStatus toStatusRecord = resolveWorkflowStatusForTicketStatus(TicketStatus.IN_PROGRESS);
-            ticket.setStatus(TicketStatus.IN_PROGRESS);
-            ticket.setStatusRecord(toStatusRecord);
-            String previousOwner = ticket.getPickedByEmployeeId();
-            ticket.setPickedByEmployeeId(employeeId);
-            Ticket saved = repository.save(ticket);
-            ticketWorkflowHistoryService.recordSuccessfulFixedAction(
-                    saved,
-                    AccessKey.START_WORK,
-                    TicketStatus.PICKED,
-                    TicketStatus.IN_PROGRESS,
-                    fromStatusId,
-                    resolveStatusRecordId(toStatusRecord),
-                    employeeId,
-                    previousOwner,
-                    employeeId,
-                    null,
-                    null
-            );
-            TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
-            log.info("event=ticket_started ticketId={} previousOwner={} employeeId={} statusTransition=PICKED->IN_PROGRESS", ticketId, previousOwner, employeeId);
-            return resp;
-        }
-
-        log.warn("event=invalid_status_transition ticketId={} status={} attemptedAction=start-work", ticketId, ticket.getStatus());
-        throw new ResponseStatusException(
-            HttpStatus.BAD_REQUEST,
-            "Ticket can only be started from PICKED status"
-        );
-    }
-
-    @Transactional
-    public TicketResponse completeTicket(
-            Long ticketId,
-            CompleteTicketRequest request,
-            String employeeId,
-            String role
-    ) {
-        Ticket ticket = repository.findById(ticketId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Ticket not found"
-                ));
-
-        if (ticket.getStatus() != TicketStatus.IN_PROGRESS) {
-            log.warn("event=invalid_status_transition ticketId={} status={} attemptedAction=complete", ticketId, ticket.getStatus());
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ticket can only be completed from IN_PROGRESS status"
-            );
-        }
-
-        workflowService.requireTransitionAllowed(AccessKey.COMPLETE_TICKET, TicketStatus.IN_PROGRESS, TicketStatus.COMPLETED);
-
-        if (!isAdminRole(role) && !employeeId.equals(ticket.getPickedByEmployeeId())) {
-            log.warn("event=completion_denied ticketId={} status={} employeeId={} role={}", ticketId, ticket.getStatus(), employeeId, role);
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Not authorized to complete this ticket"
-            );
-        }
-
-        String owner = ticket.getPickedByEmployeeId();
-        Long fromStatusId = resolveStatusRecordId(ticket);
-        WorkflowStatus toStatusRecord = resolveWorkflowStatusForTicketStatus(TicketStatus.COMPLETED);
-        ticket.setStatus(TicketStatus.COMPLETED);
-        ticket.setStatusRecord(toStatusRecord);
-        ticket.setCompletedAt(Instant.now());
-        ticket.setCompletedByEmployeeId(employeeId);
-        ticket.setCompletionRemark(trimToNull(request.getCompletionRemark()));
-
-        Ticket saved = repository.save(ticket);
-        ticketWorkflowHistoryService.recordSuccessfulFixedAction(
-                saved,
-                AccessKey.COMPLETE_TICKET,
-                TicketStatus.IN_PROGRESS,
-                TicketStatus.COMPLETED,
-                fromStatusId,
-                resolveStatusRecordId(toStatusRecord),
-                employeeId,
-                owner,
-                owner,
-                saved.getCompletionRemark(),
-                null
-        );
-        TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
-        log.info("event=ticket_completed ticketId={} ticketNumber={} employeeId={} statusTransition=IN_PROGRESS->COMPLETED", ticketId, ticket.getTicketNumber(), employeeId);
-        return resp;
-    }
-
-    @Transactional
-    public TicketResponse cancelTicket(
-            Long ticketId,
-            CancelTicketRequest request,
-            String employeeId,
-            String role
-    ) {
-        Ticket ticket = repository.findById(ticketId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Ticket not found"
-                ));
-
-        if (ticket.getStatus() == TicketStatus.COMPLETED || ticket.getStatus() == TicketStatus.CANCELLED) {
-            log.warn("event=invalid_status_transition ticketId={} status={} attemptedAction=cancel", ticketId, ticket.getStatus());
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ticket cannot be cancelled in its current status"
-            );
-        }
-
-        if (!isAdminRole(role)) {
-            log.warn("event=cancellation_denied ticketId={} status={} employeeId={} role={}", ticketId, ticket.getStatus(), employeeId, role);
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Not authorized to cancel this ticket"
-            );
-        }
-
-        TicketStatus previousStatus = ticket.getStatus();
-        String previousOwner = ticket.getPickedByEmployeeId();
-        Long fromStatusId = resolveStatusRecordId(ticket);
-        workflowService.requireTransitionAllowed(AccessKey.CANCEL_TICKET, previousStatus, TicketStatus.CANCELLED);
-        WorkflowStatus toStatusRecord = resolveWorkflowStatusForTicketStatus(TicketStatus.CANCELLED);
-        ticket.setStatus(TicketStatus.CANCELLED);
-        ticket.setStatusRecord(toStatusRecord);
-        ticket.setCancelledAt(Instant.now());
-        ticket.setCancelledByEmployeeId(employeeId);
-        ticket.setCancellationReason(request.getCancellationReason().trim());
-
-        Ticket saved = repository.save(ticket);
-        ticketWorkflowHistoryService.recordSuccessfulFixedAction(
-                saved,
-                AccessKey.CANCEL_TICKET,
-                previousStatus,
-                TicketStatus.CANCELLED,
-                fromStatusId,
-                resolveStatusRecordId(toStatusRecord),
-                employeeId,
-                previousOwner,
-                null,
-                null,
-                saved.getCancellationReason()
-        );
-        TicketResponse resp = toTicketResponse(saved, ticketChargeService.calculateTotalCharge(saved.getId()));
-        log.info("event=ticket_cancelled ticketId={} ticketNumber={} employeeId={} statusTransition={}->CANCELLED", ticketId, ticket.getTicketNumber(), employeeId, previousStatus);
-        return resp;
     }
 
     private Long resolveStatusRecordId(Ticket ticket) {
@@ -460,18 +236,6 @@ public class TicketService {
         }
         return workflowTransitionCategoryRuleRepository
                 .existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(transition.getId(), categoryId);
-    }
-
-    private boolean isAdminRole(String role) {
-        return "SUPER_ADMIN".equals(role) || "ADMIN".equals(role);
-    }
-
-    private boolean isSuperAdminRole(String role) {
-        return "SUPER_ADMIN".equals(role);
-    }
-
-    private boolean isOperationalRole(String role) {
-        return isAdminRole(role) || "EMPLOYEE".equals(role) || "TECHNICIAN".equals(role);
     }
 
     private TicketCategoryConfig resolveTicketCategory(Ticket ticket) {
@@ -617,125 +381,6 @@ public class TicketService {
         );
     }
 
-    private TicketActionAvailabilityResponse evaluatePickAvailability(Ticket ticket, String employeeId) {
-        TicketStatus status = ticket.getStatus();
-        TicketStatus targetStatus = status == TicketStatus.NEW || status == TicketStatus.PICKED
-                ? TicketStatus.PICKED
-                : null;
-        return evaluateWorkflowAvailability(
-                ticket,
-                employeeId,
-                AccessKey.PICK_TICKET,
-                targetStatus,
-                null
-        );
-    }
-
-    private TicketActionAvailabilityResponse evaluateStartWorkAvailability(Ticket ticket, String employeeId) {
-        TicketStatus targetStatus = ticket.getStatus() == TicketStatus.PICKED
-                ? TicketStatus.IN_PROGRESS
-                : null;
-        return evaluateWorkflowAvailability(
-                ticket,
-                employeeId,
-                AccessKey.START_WORK,
-                targetStatus,
-                null
-        );
-    }
-
-    private TicketActionAvailabilityResponse evaluateCompleteAvailability(Ticket ticket, String employeeId, String role) {
-        TicketActionAvailabilityResponse baseAvailability = evaluateWorkflowAvailability(
-                ticket,
-                employeeId,
-                AccessKey.COMPLETE_TICKET,
-                ticket.getStatus() == TicketStatus.IN_PROGRESS ? TicketStatus.COMPLETED : null,
-                null
-        );
-        if (!baseAvailability.available()) {
-            return baseAvailability;
-        }
-
-        boolean isTicketOwner = employeeId != null && employeeId.equals(ticket.getPickedByEmployeeId());
-        if (!isAdminRole(role) && !isTicketOwner) {
-            return unavailable(
-                    OWNER_REQUIRED,
-                    "Only the assigned technician or admin can complete this ticket."
-            );
-        }
-
-        return available();
-    }
-
-    private TicketActionAvailabilityResponse evaluateCancelAvailability(Ticket ticket, String employeeId, String role) {
-        TicketActionAvailabilityResponse baseAvailability = evaluateWorkflowAvailability(
-                ticket,
-                employeeId,
-                AccessKey.CANCEL_TICKET,
-                canCancelFromStatus(ticket.getStatus()) ? TicketStatus.CANCELLED : null,
-                null
-        );
-        if (!baseAvailability.available()) {
-            return baseAvailability;
-        }
-
-        if (!isAdminRole(role)) {
-            return unavailable(
-                    ADMIN_REQUIRED,
-                    "Only an admin can cancel this ticket."
-            );
-        }
-
-        return available();
-    }
-
-    private TicketActionAvailabilityResponse evaluateWorkflowAvailability(
-            Ticket ticket,
-            String employeeId,
-            AccessKey actionKey,
-            TicketStatus targetStatus,
-            String statusMessage
-    ) {
-        if (!accessService.isAllowed(employeeId, actionKey)) {
-            return unavailable(
-                    ROLE_ACCESS_DENIED,
-                    "You do not have access to perform this action."
-            );
-        }
-
-        TicketStatus status = ticket.getStatus();
-        if (status == TicketStatus.COMPLETED || status == TicketStatus.CANCELLED) {
-            return unavailable(
-                    TERMINAL_STATUS,
-                    "Completed and cancelled tickets are terminal."
-            );
-        }
-
-        if (targetStatus == null) {
-            return unavailable(
-                    STATUS_NOT_ALLOWED,
-                    statusMessage != null ? statusMessage : "This action is not available for the current ticket status."
-            );
-        }
-
-        TicketCategoryConfig category = resolveTicketCategory(ticket);
-        boolean transitionAllowed = isDbWorkflowMode(category)
-                ? workflowService.isTransitionAllowedForCategory(actionKey, status, targetStatus, category.getId())
-                : workflowService.isTransitionAllowed(actionKey, status, targetStatus);
-        if (!transitionAllowed) {
-            return unavailable(
-                    WORKFLOW_TRANSITION_INACTIVE,
-                    "This action is disabled for the current workflow status."
-            );
-        }
-
-        return available();
-    }
-
-    private boolean canCancelFromStatus(TicketStatus status) {
-        return status == TicketStatus.NEW || status == TicketStatus.PICKED || status == TicketStatus.IN_PROGRESS;
-    }
-
     private int compareStatusFilterOptions(
             TicketStatusFilterOptionResponse first,
             TicketStatusFilterOptionResponse second,
@@ -782,14 +427,6 @@ public class TicketService {
 
     private boolean isTerminalTicketStatus(TicketStatus status) {
         return status == TicketStatus.COMPLETED || status == TicketStatus.CANCELLED;
-    }
-
-    private TicketActionAvailabilityResponse available() {
-        return new TicketActionAvailabilityResponse(true, null, null);
-    }
-
-    private TicketActionAvailabilityResponse unavailable(String reasonCode, String message) {
-        return new TicketActionAvailabilityResponse(false, reasonCode, message);
     }
 
     @Transactional(readOnly = true)

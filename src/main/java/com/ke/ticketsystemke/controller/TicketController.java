@@ -2,8 +2,6 @@ package com.ke.ticketsystemke.controller;
 
 import com.ke.ticketsystemke.dto.AssignTicketRequest;
 import com.ke.ticketsystemke.dto.AssignableEmployeeResponse;
-import com.ke.ticketsystemke.dto.CancelTicketRequest;
-import com.ke.ticketsystemke.dto.CompleteTicketRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
 import com.ke.ticketsystemke.dto.GenericTransitionExecutionRequest;
@@ -336,60 +334,14 @@ public class TicketController {
         return list;
     }
 
-    @PostMapping("/{id}/pick")
-    public TicketResponse pickTicket(
-            @PathVariable Long id,
-            Authentication authentication
-    ) {
-        String employeeId = authentication.getName();
-        accessService.requireAllowed(employeeId, AccessKey.PICK_TICKET);
-        log.info("event=ticket_pick_requested ticketId={} employeeId={}", id, employeeId);
-        TicketResponse resp = service.pickTicket(id, employeeId);
-        log.info("event=ticket_picked ticketId={} ticketNumber={} pickedBy={}", resp.id(), resp.ticketNumber(), employeeId);
-        return resp;
-    }
-
-    @PostMapping("/{id}/start-work")
-    public TicketResponse startWork(
-            @PathVariable Long id,
-            Authentication authentication
-    ) {
-        String employeeId = authentication.getName();
-        accessService.requireAllowed(employeeId, AccessKey.START_WORK);
-        log.info("event=ticket_start_requested ticketId={} employeeId={}", id, employeeId);
-        TicketResponse resp = service.startWork(id, employeeId);
-        log.info("event=ticket_started ticketId={} ticketNumber={} employeeId={}", resp.id(), resp.ticketNumber(), employeeId);
-        return resp;
-    }
-
-    @PostMapping("/{id}/complete")
-    public TicketResponse completeTicket(
-            @PathVariable Long id,
-            @Valid @RequestBody CompleteTicketRequest request,
-            Authentication authentication
-    ) {
-        String employeeId = authentication.getName();
-        accessService.requireAllowed(employeeId, AccessKey.COMPLETE_TICKET);
-        String role = extractRole(authentication);
-        log.info("event=ticket_complete_requested ticketId={} employeeId={} role={}", id, employeeId, role);
-        TicketResponse resp = service.completeTicket(id, request, employeeId, role);
-        log.info("event=ticket_completed ticketId={} ticketNumber={} employeeId={}", resp.id(), resp.ticketNumber(), employeeId);
-        return resp;
-    }
-
-    @PostMapping("/{id}/cancel")
-    public TicketResponse cancelTicket(
-            @PathVariable Long id,
-            @Valid @RequestBody CancelTicketRequest request,
-            Authentication authentication
-    ) {
-        String employeeId = authentication.getName();
-        accessService.requireAllowed(employeeId, AccessKey.CANCEL_TICKET);
-        String role = extractRole(authentication);
-        log.info("event=ticket_cancel_requested ticketId={} employeeId={} role={}", id, employeeId, role);
-        TicketResponse resp = service.cancelTicket(id, request, employeeId, role);
-        log.info("event=ticket_cancelled ticketId={} ticketNumber={} employeeId={}", resp.id(), resp.ticketNumber(), employeeId);
-        return resp;
+    private int countActiveFilters(boolean hasSearch, boolean mine, String... filters) {
+        int count = (hasSearch ? 1 : 0) + (mine ? 1 : 0);
+        for (String filter : filters) {
+            if (filter != null && !filter.isBlank()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private String extractRole(Authentication authentication) {
@@ -400,15 +352,5 @@ public class TicketController {
                 .map(authority -> authority.substring("ROLE_".length()))
                 .findFirst()
                 .orElse("");
-    }
-
-    private int countActiveFilters(boolean hasSearch, boolean mine, String... filters) {
-        int count = (hasSearch ? 1 : 0) + (mine ? 1 : 0);
-        for (String filter : filters) {
-            if (filter != null && !filter.isBlank()) {
-                count++;
-            }
-        }
-        return count;
     }
 }

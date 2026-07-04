@@ -161,8 +161,33 @@ public class WorkflowValidationService {
     public void requireValidCategoryWorkflow(Long categoryId) {
         WorkflowValidationResponse response = validateCategoryWorkflow(categoryId, true);
         if (!response.valid()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Category workflow configuration is invalid");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, buildInvalidWorkflowMessage(response));
         }
+    }
+
+    private String buildInvalidWorkflowMessage(WorkflowValidationResponse response) {
+        WorkflowValidationIssueResponse primaryIssue = response.blockingIssues().stream()
+                .findFirst()
+                .orElse(null);
+        if (primaryIssue == null) {
+            return "Category workflow configuration is invalid";
+        }
+
+        String transitionContext = primaryIssue.transitionId() == null
+                ? ""
+                : " on transition #" + primaryIssue.transitionId();
+        String message = primaryIssue.message() == null || primaryIssue.message().isBlank()
+                ? primaryIssue.code()
+                : primaryIssue.message();
+        return limitMessage("Workflow invalid: " + primaryIssue.code() + transitionContext + " - " + message);
+    }
+
+    private String limitMessage(String message) {
+        int maxLength = 160;
+        if (message.length() <= maxLength) {
+            return message;
+        }
+        return message.substring(0, maxLength - 3) + "...";
     }
 
     private void validateTransitionReferences(
