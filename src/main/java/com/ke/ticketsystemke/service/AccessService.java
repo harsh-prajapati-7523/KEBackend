@@ -89,7 +89,7 @@ public class AccessService {
                 .orElse(false);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public void requireAllowed(String employeeId, AccessKey accessKey) {
         if (!isAllowed(employeeId, accessKey)) {
             log.warn("event=access_denied employeeId={} accessKey={} decision=deny", employeeId, accessKey);
@@ -97,7 +97,7 @@ public class AccessService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public void requireAllowed(String employeeId, String accessKey) {
         if (!isAllowed(employeeId, accessKey)) {
             log.warn("event=access_denied employeeId={} accessKey={} decision=deny", employeeId, accessKey);
@@ -105,7 +105,7 @@ public class AccessService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public void requireAnyAllowed(String employeeId, AccessKey... accessKeys) {
         for (AccessKey accessKey : accessKeys) {
             if (isAllowed(employeeId, accessKey)) {

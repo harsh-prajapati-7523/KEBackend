@@ -130,7 +130,7 @@ public class TicketController {
         return employeeService.listAssignableEmployees();
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     public TicketResponse getTicket(
             @PathVariable Long id,
             Authentication authentication
@@ -141,7 +141,7 @@ public class TicketController {
         return service.getTicket(id);
     }
 
-    @PatchMapping("/{id}/assign")
+    @PatchMapping("/{id:\\d+}/assign")
     public TicketResponse assignTicket(
             @PathVariable Long id,
             @Valid @RequestBody AssignTicketRequest request,
@@ -164,7 +164,7 @@ public class TicketController {
         return service.getTicketStatusFilterOptions(employeeId);
     }
 
-    @GetMapping("/{id}/customer-history")
+    @GetMapping("/{id:\\d+}/customer-history")
     public CustomerHistoryResponse getCustomerHistory(
             @PathVariable Long id,
             Authentication authentication
@@ -175,7 +175,7 @@ public class TicketController {
         return service.getCustomerHistory(id, employeeId);
     }
 
-    @GetMapping("/{id}/dynamic-values")
+    @GetMapping("/{id:\\d+}/dynamic-values")
     public TicketDynamicValuesResponse getDynamicValues(
             @PathVariable Long id,
             Authentication authentication
@@ -186,7 +186,7 @@ public class TicketController {
         return service.getDynamicValues(id, employeeId);
     }
 
-    @GetMapping("/{id}/workflow-history")
+    @GetMapping("/{id:\\d+}/workflow-history")
     public TicketWorkflowHistoryPageResponse getWorkflowHistory(
             @PathVariable Long id,
             @RequestParam(required = false) Integer page,
@@ -200,7 +200,7 @@ public class TicketController {
         return ticketWorkflowHistoryService.getTicketWorkflowHistory(id, page, size);
     }
 
-    @GetMapping("/{id}/available-actions")
+    @GetMapping("/{id:\\d+}/available-actions")
     public TicketAvailableActionsResponse getAvailableActions(
             @PathVariable Long id,
             Authentication authentication
@@ -211,7 +211,7 @@ public class TicketController {
         return service.getAvailableActions(id, employeeId, role);
     }
 
-    @PostMapping("/{id}/workflow-transitions/{transitionId}/preview")
+    @PostMapping("/{id:\\d+}/workflow-transitions/{transitionId}/preview")
     public GenericTransitionPreviewResponse previewWorkflowTransition(
             @PathVariable Long id,
             @PathVariable Long transitionId,
@@ -228,7 +228,7 @@ public class TicketController {
         return genericTransitionExecutorService.previewTransition(id, transitionId, employeeId, safeRequest);
     }
 
-    @PostMapping("/{id}/workflow-transitions/{transitionId}/execute")
+    @PostMapping("/{id:\\d+}/workflow-transitions/{transitionId}/execute")
     public TicketResponse executeWorkflowTransition(
             @PathVariable Long id,
             @PathVariable Long transitionId,
@@ -248,7 +248,7 @@ public class TicketController {
         return response;
     }
 
-    @PostMapping("/{id}/workflow-actions/{actionKey}/execute")
+    @PostMapping("/{id:\\d+}/workflow-actions/{actionKey}/execute")
     public TicketResponse executeWorkflowAction(
             @PathVariable Long id,
             @PathVariable String actionKey,
