@@ -42,6 +42,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -639,26 +640,48 @@ public class WorkflowService {
                 .toList();
 
         for (WorkflowTransition candidate : matchingTransitions) {
-            if (hasCategoryOverlap(transition, candidate)) {
+            Optional<TicketCategoryConfig> overlappingCategory = findCategoryOverlap(transition, candidate);
+            if (overlappingCategory.isPresent()) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Workflow transition activation would create ambiguous action/status/category matches"
+                        buildAmbiguousActivationMessage(transition, candidate, overlappingCategory.get())
                 );
             }
         }
     }
 
-    private boolean hasCategoryOverlap(WorkflowTransition first, WorkflowTransition second) {
+    private Optional<TicketCategoryConfig> findCategoryOverlap(WorkflowTransition first, WorkflowTransition second) {
         for (TicketCategoryConfig category : ticketCategoryRepository.findAll()) {
             if (!category.isActive()) {
                 continue;
             }
             if (isCategoryAllowedForActivation(first, category.getId())
                     && isCategoryAllowedForActivation(second, category.getId())) {
-                return true;
+                return Optional.of(category);
             }
         }
-        return false;
+        return Optional.empty();
+    }
+
+    private String buildAmbiguousActivationMessage(
+            WorkflowTransition requested,
+            WorkflowTransition existing,
+            TicketCategoryConfig category
+    ) {
+        String actionKey = requested.getActionKey();
+        String fromStatusKey = requested.getFromStatusRecord() != null
+                ? requested.getFromStatusRecord().getStatusKey()
+                : requested.getFromStatus() == null ? "UNKNOWN" : requested.getFromStatus().name();
+        String categoryName = category.getDisplayName() == null || category.getDisplayName().isBlank()
+                ? category.getCategoryKey()
+                : category.getDisplayName();
+        return String.format(
+                "Cannot enable: transition #%d already uses %s from %s for %s.",
+                existing.getId(),
+                actionKey,
+                fromStatusKey,
+                categoryName
+        );
     }
 
     private boolean isCategoryAllowedForActivation(WorkflowTransition transition, Long categoryId) {

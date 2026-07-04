@@ -4,7 +4,6 @@ import com.ke.ticketsystemke.dto.GenericTransitionExecutionRequest;
 import com.ke.ticketsystemke.dto.GenericTransitionPreviewRequest;
 import com.ke.ticketsystemke.dto.GenericTransitionPreviewResponse;
 import com.ke.ticketsystemke.dto.TicketResponse;
-import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.TicketCategoryConfig;
 import com.ke.ticketsystemke.entity.Ticket;
@@ -28,12 +27,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class GenericTransitionExecutorService {
 
     private static final String GENERIC_DISABLED_REASON = "Not available for this ticket.";
-    private static final java.util.List<String> PROTECTED_FIXED_ACTION_KEYS = java.util.List.of(
-            AccessKey.PICK_TICKET.name(),
-            AccessKey.START_WORK.name(),
-            AccessKey.COMPLETE_TICKET.name(),
-            AccessKey.CANCEL_TICKET.name()
-    );
 
     private final TicketRepository ticketRepository;
     private final TicketCategoryRepository ticketCategoryRepository;
@@ -395,23 +388,24 @@ public class GenericTransitionExecutorService {
             WorkflowStatus toStatus,
             TicketStatus toStatusBehaviorBucket
     ) {
-        boolean customTerminalTarget = isAllowedCustomTerminalTarget(toStatus);
-        if (transition.isProtectedTransition()
-                || action.isProtectedAction()
-                || PROTECTED_FIXED_ACTION_KEYS.contains(action.getActionKey())
-                || fromStatus.isTerminal()
-                || (toStatus.isTerminal() && !customTerminalTarget)) {
+        WorkflowStatusValidationHelper.GenericTransitionEligibility eligibility =
+                WorkflowStatusValidationHelper.evaluateGenericTransitionEligibility(
+                        transition,
+                        action,
+                        fromStatus,
+                        toStatus,
+                        toStatusBehaviorBucket
+                );
+        if (eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.PROTECTED_TRANSITION)
+                || eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.PROTECTED_ACTION)
+                || eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.PROTECTED_FIXED_ACTION_KEY)
+                || eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.TERMINAL_SOURCE_STATUS)
+                || eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.PROTECTED_TERMINAL_TARGET_STATUS)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transition requires dedicated workflow handling");
         }
-        if (requiresUnsupportedBusinessSideEffect(toStatusBehaviorBucket, customTerminalTarget)) {
+        if (eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.UNSUPPORTED_TARGET_SIDE_EFFECT)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transition requires unsupported business side effects");
         }
-    }
-
-    private boolean requiresUnsupportedBusinessSideEffect(TicketStatus toStatus, boolean customTerminalTarget) {
-        return toStatus == TicketStatus.PICKED
-                || (toStatus == TicketStatus.COMPLETED && !customTerminalTarget)
-                || toStatus == TicketStatus.CANCELLED;
     }
 
     private boolean isWorkflowStatusMetadataValid(WorkflowStatus workflowStatus, TicketStatus expectedStatus) {
@@ -435,10 +429,7 @@ public class GenericTransitionExecutorService {
     }
 
     private boolean isAllowedCustomTerminalTarget(WorkflowStatus workflowStatus) {
-        return isCustomTargetStatus(workflowStatus)
-                && workflowStatus.isTerminal()
-                && workflowStatus.isActive()
-                && workflowStatus.getBehaviorBucket() == TicketStatus.COMPLETED;
+        return WorkflowStatusValidationHelper.isAllowedCustomTerminalTarget(workflowStatus);
     }
 
     public record GenericTransitionExecutionPlan(

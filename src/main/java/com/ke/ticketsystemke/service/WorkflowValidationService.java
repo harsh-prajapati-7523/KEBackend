@@ -113,6 +113,9 @@ public class WorkflowValidationService {
             if (!isCategoryAllowed(transition, category.getId())) {
                 continue;
             }
+            if (hasRuntimeUnsupportedGenericExecution(transition, action.get(), blockingIssues)) {
+                continue;
+            }
 
             validTransitionCount++;
             executableCategoryTransitions.add(transition);
@@ -213,7 +216,7 @@ public class WorkflowValidationService {
                 .toList();
 
         if (activeRoleRules.isEmpty()) {
-            addIssue(warnings, "MISSING_ROLE_TRANSITION_SCOPE_COVERAGE", "Active transition is not scoped to any role", transition.getId());
+            addIssue(warnings, "MISSING_ROLE_TRANSITION_SCOPE_COVERAGE", "No transition-specific role scope is configured. This transition is available to all roles that have permission for this action.", transition.getId());
         }
 
         List<Role> candidateRoles = activeRoleRules.isEmpty()
@@ -267,6 +270,112 @@ public class WorkflowValidationService {
                     transition.getId()
             );
         }
+    }
+
+    private boolean hasRuntimeUnsupportedGenericExecution(
+            WorkflowTransition transition,
+            WorkflowAction action,
+            List<WorkflowValidationIssueResponse> blockingIssues
+    ) {
+        boolean unsupported = false;
+        WorkflowStatusValidationHelper.CustomStatusExecutability sourceExecutability =
+                WorkflowStatusValidationHelper.evaluateCustomStatusExecutability(transition.getFromStatusRecord(), false);
+        WorkflowStatusValidationHelper.CustomStatusExecutability targetExecutability =
+                WorkflowStatusValidationHelper.evaluateCustomStatusExecutability(
+                        transition.getToStatusRecord(),
+                        WorkflowStatusValidationHelper.isAllowedCustomTerminalTarget(transition.getToStatusRecord())
+                );
+        TicketStatus targetBehavior = transition.getToStatusRecord() == null
+                ? transition.getToStatus()
+                : transition.getToStatusRecord().getBehaviorBucket();
+        WorkflowStatusValidationHelper.GenericTransitionEligibility eligibility =
+                WorkflowStatusValidationHelper.evaluateGenericTransitionEligibility(
+                        transition,
+                        action,
+                        transition.getFromStatusRecord(),
+                        transition.getToStatusRecord(),
+                        targetBehavior
+                );
+
+        if (eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.PROTECTED_TRANSITION)) {
+            addIssue(
+                    blockingIssues,
+                    "RUNTIME_UNSUPPORTED_GENERIC_TRANSITION",
+                    "Protected transitions require dedicated workflow handling and cannot run as generic custom transitions.",
+                    transition.getId()
+            );
+            unsupported = true;
+        }
+        if (eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.PROTECTED_ACTION)
+                || eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.PROTECTED_FIXED_ACTION_KEY)) {
+            addIssue(
+                    blockingIssues,
+                    "RUNTIME_UNSUPPORTED_FIXED_ACTION",
+                    "Use a custom non-protected action for generic workflow transitions. Pick, start, complete, and cancel use fixed workflow buttons because they require dedicated side effects.",
+                    transition.getId()
+            );
+            unsupported = true;
+        }
+        if (!sourceExecutability.executable()) {
+            addIssue(
+                    blockingIssues,
+                    "RUNTIME_UNSUPPORTED_GENERIC_TRANSITION",
+                    "Use an active custom source status with a supported behavior bucket for generic execution.",
+                    transition.getId()
+            );
+            unsupported = true;
+        }
+        if (eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.TERMINAL_SOURCE_STATUS)
+                && sourceExecutability.executable()) {
+            addIssue(
+                    blockingIssues,
+                    "RUNTIME_UNSUPPORTED_GENERIC_TRANSITION",
+                    "Terminal source statuses cannot be changed by generic workflow transitions.",
+                    transition.getId()
+            );
+            unsupported = true;
+        }
+        if (!targetExecutability.executable()) {
+            addIssue(
+                    blockingIssues,
+                    "RUNTIME_UNSUPPORTED_TARGET_STATUS",
+                    "Use an active custom target status with a supported behavior bucket. Protected fixed statuses require dedicated workflow handling.",
+                    transition.getId()
+            );
+            unsupported = true;
+        }
+
+        if (targetBehavior == TicketStatus.PICKED || targetBehavior == TicketStatus.CANCELLED) {
+            addIssue(
+                    blockingIssues,
+                    "RUNTIME_UNSUPPORTED_TARGET_STATUS",
+                    "Generic transitions cannot target PICKED or CANCELLED because those statuses require fixed workflow side effects.",
+                    transition.getId()
+            );
+            unsupported = true;
+        }
+        if (targetBehavior == TicketStatus.COMPLETED
+                && eligibility.contains(WorkflowStatusValidationHelper.GenericTransitionEligibilityIssue.PROTECTED_TERMINAL_TARGET_STATUS)) {
+            addIssue(
+                    blockingIssues,
+                    "RUNTIME_UNSUPPORTED_TARGET_STATUS",
+                    "Generic completion must target an active custom terminal COMPLETED status. Protected/system completion uses fixed workflow handling.",
+                    transition.getId()
+            );
+            unsupported = true;
+        }
+        if (WorkflowStatusValidationHelper.isTerminalBehavior(targetBehavior)
+                && transition.getToStatusRecord() != null
+                && !transition.getToStatusRecord().isTerminal()) {
+            addIssue(
+                    blockingIssues,
+                    "RUNTIME_UNSUPPORTED_TARGET_STATUS",
+                    "Non-terminal custom target statuses cannot use terminal behavior buckets.",
+                    transition.getId()
+            );
+            unsupported = true;
+        }
+        return unsupported;
     }
 
     private void validateReachability(

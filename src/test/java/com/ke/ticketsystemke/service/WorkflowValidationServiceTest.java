@@ -187,6 +187,8 @@ class WorkflowValidationServiceTest {
 
         assertThat(response.readyToActivate()).isTrue();
         assertThat(response.blockingIssues()).isEmpty();
+        assertThat(response.blockingIssues())
+                .noneMatch(issue -> issue.code().startsWith("RUNTIME_UNSUPPORTED"));
         assertThat(response.warnings())
                 .hasSize(2)
                 .allMatch(issue -> "MISSING_ROLE_TRANSITION_SCOPE_COVERAGE".equals(issue.code()));
@@ -198,37 +200,34 @@ class WorkflowValidationServiceTest {
     @Test
     void validationSeedsAllNewBehaviorBucketStartsWhenLiteralNewPathAlsoExists() {
         TicketCategoryConfig category = category();
-        WorkflowAction fixedStartAction = action("PICK_TICKET");
-        WorkflowAction fixedCompleteAction = action("START_WORK");
+        WorkflowAction literalStartAction = action("ALT_START");
+        WorkflowAction literalCompleteAction = action("ALT_FINISH");
         WorkflowAction customStartAction = action("START_SIMPLE_WORK");
         WorkflowAction customCompleteAction = action("COMPLETE_SIMPLE_WORK");
         WorkflowStatus literalNew = status(1L, "NEW", TicketStatus.NEW, false);
-        WorkflowStatus picked = status(2L, "PICKED", TicketStatus.PICKED, false);
-        WorkflowStatus inProgress = status(3L, "IN_PROGRESS", TicketStatus.IN_PROGRESS, false);
-        WorkflowStatus completed = status(4L, "COMPLETED", TicketStatus.COMPLETED, true);
+        WorkflowStatus literalProgress = status(2L, "ALT_PROGRESS", TicketStatus.IN_PROGRESS, false);
+        WorkflowStatus literalDone = status(4L, "ALT_DONE", TicketStatus.COMPLETED, true);
         WorkflowStatus customNew = status(5L, "CUSTOM_NEW", TicketStatus.NEW, false);
         WorkflowStatus customInProgress = status(6L, "CUSTOM_IN_PROGRESS", TicketStatus.IN_PROGRESS, false);
         WorkflowStatus customDone = status(7L, "CUSTOM_DONE", TicketStatus.COMPLETED, true);
-        WorkflowTransition fixedStartTransition = transition(100L, "PICK_TICKET", literalNew, picked);
-        WorkflowTransition fixedCompleteTransition = transition(101L, "START_WORK", picked, inProgress);
-        WorkflowTransition fixedTerminalTransition = transition(102L, "COMPLETE_SIMPLE_WORK", inProgress, completed);
+        WorkflowTransition literalStartTransition = transition(100L, "ALT_START", literalNew, literalProgress);
+        WorkflowTransition literalCompleteTransition = transition(101L, "ALT_FINISH", literalProgress, literalDone);
         WorkflowTransition customStartTransition = transition(103L, "START_SIMPLE_WORK", customNew, customInProgress);
         WorkflowTransition customCompleteTransition = transition(104L, "COMPLETE_SIMPLE_WORK", customInProgress, customDone);
         Role superAdmin = role(1L, "SUPER_ADMIN");
 
         when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
         when(workflowTransitionRepository.findAll()).thenReturn(List.of(
-                fixedStartTransition,
-                fixedCompleteTransition,
-                fixedTerminalTransition,
+                literalStartTransition,
+                literalCompleteTransition,
                 customStartTransition,
                 customCompleteTransition
         ));
-        when(workflowActionRepository.findByActionKey("PICK_TICKET")).thenReturn(Optional.of(fixedStartAction));
-        when(workflowActionRepository.findByActionKey("START_WORK")).thenReturn(Optional.of(fixedCompleteAction));
+        when(workflowActionRepository.findByActionKey("ALT_START")).thenReturn(Optional.of(literalStartAction));
+        when(workflowActionRepository.findByActionKey("ALT_FINISH")).thenReturn(Optional.of(literalCompleteAction));
         when(workflowActionRepository.findByActionKey("START_SIMPLE_WORK")).thenReturn(Optional.of(customStartAction));
         when(workflowActionRepository.findByActionKey("COMPLETE_SIMPLE_WORK")).thenReturn(Optional.of(customCompleteAction));
-        for (long transitionId = 100L; transitionId <= 104L; transitionId++) {
+        for (long transitionId : List.of(100L, 101L, 103L, 104L)) {
             when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(transitionId)).thenReturn(true);
             when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_IdAndCategory_IdAndActiveTrue(transitionId, 3L))
                     .thenReturn(true);
@@ -241,9 +240,10 @@ class WorkflowValidationServiceTest {
         assertThat(response.readyToActivate()).isTrue();
         assertThat(response.blockingIssues())
                 .noneMatch(issue -> "UNREACHABLE_WORKFLOW_PATH".equals(issue.code()))
-                .noneMatch(issue -> "UNREACHABLE_WORKFLOW_FROM_NEW".equals(issue.code()));
+                .noneMatch(issue -> "UNREACHABLE_WORKFLOW_FROM_NEW".equals(issue.code()))
+                .noneMatch(issue -> issue.code().startsWith("RUNTIME_UNSUPPORTED"));
         assertThat(response.warnings())
-                .hasSize(5)
+                .hasSize(4)
                 .allMatch(issue -> "MISSING_ROLE_TRANSITION_SCOPE_COVERAGE".equals(issue.code()));
     }
 
@@ -274,7 +274,34 @@ class WorkflowValidationServiceTest {
     }
 
     @Test
-    void validationAcceptsProtectedFixedTransitionsWhenExplicitlyEnabledForCategory() {
+    void validationBlocksSourceStatusWithoutBehaviorBucketForGenericExecution() {
+        TicketCategoryConfig category = category();
+        WorkflowAction action = action("CUSTOM_ADVANCE");
+        WorkflowStatus source = status(1L, "CUSTOM_UNKNOWN", TicketStatus.NEW, false);
+        source.setBehaviorBucket(null);
+        WorkflowTransition transition = transition(
+                100L,
+                "CUSTOM_ADVANCE",
+                source,
+                status(2L, "CUSTOM_IN_PROGRESS", TicketStatus.IN_PROGRESS, false)
+        );
+        transition.setFromStatus(TicketStatus.NEW);
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(transition));
+        when(workflowActionRepository.findByActionKey("CUSTOM_ADVANCE")).thenReturn(Optional.of(action));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(false);
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isFalse();
+        assertThat(response.blockingIssues())
+                .anyMatch(issue -> "RUNTIME_UNSUPPORTED_GENERIC_TRANSITION".equals(issue.code())
+                        && issue.message().contains("source status"));
+    }
+
+    @Test
+    void validationBlocksProtectedFixedTransitionsWhenExplicitlyEnabledForCategory() {
         TicketCategoryConfig category = category();
         WorkflowAction action = action();
         action.setProtectedAction(true);
@@ -290,7 +317,6 @@ class WorkflowValidationServiceTest {
                 status(3L, "COMPLETED", TicketStatus.COMPLETED, true)
         );
         completeTransition.setProtectedTransition(true);
-        Role superAdmin = role(1L, "SUPER_ADMIN");
 
         when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
         when(workflowTransitionRepository.findAll()).thenReturn(List.of(startTransition, completeTransition));
@@ -301,14 +327,136 @@ class WorkflowValidationServiceTest {
                 .thenReturn(true);
         when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(true);
         when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(101L)).thenReturn(true);
-        when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(100L)).thenReturn(List.of());
-        when(workflowTransitionRoleRuleRepository.findAllByWorkflowTransition_IdOrderByIdAsc(101L)).thenReturn(List.of());
-        when(roleRepository.findAll()).thenReturn(List.of(superAdmin));
 
         WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
 
-        assertThat(response.readyToActivate()).isTrue();
-        assertThat(response.blockingIssues()).isEmpty();
+        assertThat(response.readyToActivate()).isFalse();
+        assertThat(response.blockingIssues())
+                .anyMatch(issue -> "RUNTIME_UNSUPPORTED_GENERIC_TRANSITION".equals(issue.code()))
+                .anyMatch(issue -> "RUNTIME_UNSUPPORTED_FIXED_ACTION".equals(issue.code()))
+                .anyMatch(issue -> "RUNTIME_UNSUPPORTED_TARGET_STATUS".equals(issue.code()));
+    }
+
+    @Test
+    void validationBlocksPickedTargetForGenericExecution() {
+        TicketCategoryConfig category = category();
+        WorkflowAction action = action("CUSTOM_PICK");
+        WorkflowTransition transition = transition(
+                100L,
+                "CUSTOM_PICK",
+                status(1L, "CUSTOM_NEW", TicketStatus.NEW, false),
+                status(2L, "CUSTOM_PICKED", TicketStatus.PICKED, false)
+        );
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(transition));
+        when(workflowActionRepository.findByActionKey("CUSTOM_PICK")).thenReturn(Optional.of(action));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(false);
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isFalse();
+        assertThat(response.blockingIssues())
+                .anyMatch(issue -> "RUNTIME_UNSUPPORTED_TARGET_STATUS".equals(issue.code())
+                        && issue.message().contains("PICKED"));
+    }
+
+    @Test
+    void validationBlocksCancelledTargetForGenericExecution() {
+        TicketCategoryConfig category = category();
+        WorkflowAction action = action("CUSTOM_CANCEL");
+        WorkflowTransition transition = transition(
+                100L,
+                "CUSTOM_CANCEL",
+                status(1L, "CUSTOM_NEW", TicketStatus.NEW, false),
+                status(2L, "CUSTOM_CANCELLED", TicketStatus.CANCELLED, true)
+        );
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(transition));
+        when(workflowActionRepository.findByActionKey("CUSTOM_CANCEL")).thenReturn(Optional.of(action));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(false);
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isFalse();
+        assertThat(response.blockingIssues())
+                .anyMatch(issue -> "RUNTIME_UNSUPPORTED_TARGET_STATUS".equals(issue.code())
+                        && issue.message().contains("CANCELLED"));
+    }
+
+    @Test
+    void validationBlocksNonTerminalTargetWithTerminalBehaviorBucketForGenericExecution() {
+        TicketCategoryConfig category = category();
+        WorkflowAction action = action("CUSTOM_COMPLETE");
+        WorkflowTransition transition = transition(
+                100L,
+                "CUSTOM_COMPLETE",
+                status(1L, "CUSTOM_IN_PROGRESS", TicketStatus.IN_PROGRESS, false),
+                status(2L, "CUSTOM_DONE_BUT_OPEN", TicketStatus.COMPLETED, false)
+        );
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(transition));
+        when(workflowActionRepository.findByActionKey("CUSTOM_COMPLETE")).thenReturn(Optional.of(action));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(false);
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isFalse();
+        assertThat(response.blockingIssues())
+                .anyMatch(issue -> "RUNTIME_UNSUPPORTED_TARGET_STATUS".equals(issue.code())
+                        && issue.message().contains("Non-terminal custom target"));
+    }
+
+    @Test
+    void validationBlocksProtectedFixedActionKeysForGenericExecution() {
+        TicketCategoryConfig category = category();
+        WorkflowAction action = action("START_WORK");
+        WorkflowTransition transition = transition(
+                100L,
+                "START_WORK",
+                status(1L, "CUSTOM_NEW", TicketStatus.NEW, false),
+                status(2L, "CUSTOM_IN_PROGRESS", TicketStatus.IN_PROGRESS, false)
+        );
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(transition));
+        when(workflowActionRepository.findByActionKey("START_WORK")).thenReturn(Optional.of(action));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(false);
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isFalse();
+        assertThat(response.blockingIssues())
+                .anyMatch(issue -> "RUNTIME_UNSUPPORTED_FIXED_ACTION".equals(issue.code()));
+    }
+
+    @Test
+    void validationBlocksProtectedSystemTerminalCompletedTargetForGenericExecution() {
+        TicketCategoryConfig category = category();
+        WorkflowAction action = action("CUSTOM_COMPLETE");
+        WorkflowStatus completed = status(2L, "COMPLETED", TicketStatus.COMPLETED, true);
+        completed.setSystemStatus(true);
+        completed.setProtectedStatus(true);
+        WorkflowTransition transition = transition(
+                100L,
+                "CUSTOM_COMPLETE",
+                status(1L, "CUSTOM_IN_PROGRESS", TicketStatus.IN_PROGRESS, false),
+                completed
+        );
+
+        when(ticketCategoryRepository.findById(3L)).thenReturn(Optional.of(category));
+        when(workflowTransitionRepository.findAll()).thenReturn(List.of(transition));
+        when(workflowActionRepository.findByActionKey("CUSTOM_COMPLETE")).thenReturn(Optional.of(action));
+        when(workflowTransitionCategoryRuleRepository.existsByWorkflowTransition_Id(100L)).thenReturn(false);
+
+        WorkflowValidationResponse response = workflowValidationService.validateCategoryWorkflow(3L, true);
+
+        assertThat(response.readyToActivate()).isFalse();
+        assertThat(response.blockingIssues())
+                .anyMatch(issue -> "RUNTIME_UNSUPPORTED_TARGET_STATUS".equals(issue.code())
+                        && issue.message().contains("Protected/system completion"));
     }
 
     private TicketCategoryConfig category() {
