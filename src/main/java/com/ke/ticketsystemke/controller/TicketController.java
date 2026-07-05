@@ -4,6 +4,7 @@ import com.ke.ticketsystemke.dto.AssignTicketRequest;
 import com.ke.ticketsystemke.dto.AssignableEmployeeResponse;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
+import com.ke.ticketsystemke.dto.CustomerLookupResponse;
 import com.ke.ticketsystemke.dto.GenericTransitionExecutionRequest;
 import com.ke.ticketsystemke.dto.GenericTransitionPreviewRequest;
 import com.ke.ticketsystemke.dto.GenericTransitionPreviewResponse;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,6 +130,24 @@ public class TicketController {
         accessService.requireAllowed(employeeId, AccessKey.ASSIGN_TICKET);
         log.info("event=ticket_assignable_employees_requested employeeId={}", employeeId);
         return employeeService.listAssignableEmployees();
+    }
+
+    @GetMapping("/customer-lookup")
+    public ResponseEntity<CustomerLookupResponse> lookupCustomer(
+            @RequestParam String mobileNumber,
+            Authentication authentication
+    ) {
+        String employeeId = authentication.getName();
+        accessService.requireAllowed(employeeId, AccessKey.CREATE_TICKET);
+        log.info("event=customer_lookup_requested employeeId={}", employeeId);
+        Optional<CustomerLookupResponse> response = service.lookupCustomerByMobileNumber(mobileNumber);
+        if (response.isEmpty()) {
+            log.info("event=customer_lookup_empty employeeId={}", employeeId);
+            return ResponseEntity.noContent().build();
+        }
+        log.info("event=customer_lookup_returned employeeId={} sourceTicketNumber={}",
+                employeeId, response.get().sourceTicketNumber());
+        return ResponseEntity.ok(response.get());
     }
 
     @GetMapping("/{id:\\d+}")

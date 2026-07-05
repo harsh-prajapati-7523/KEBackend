@@ -5,6 +5,7 @@ import com.ke.ticketsystemke.dto.CreateTicketDynamicValueRequest;
 import com.ke.ticketsystemke.dto.CreateTicketRequest;
 import com.ke.ticketsystemke.dto.CustomerHistoryResponse;
 import com.ke.ticketsystemke.dto.CustomerHistoryTicketResponse;
+import com.ke.ticketsystemke.dto.CustomerLookupResponse;
 import com.ke.ticketsystemke.dto.TicketAvailableActionsResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicActionResponse;
 import com.ke.ticketsystemke.dto.TicketDynamicValueResponse;
@@ -593,6 +594,17 @@ public class TicketService {
         log.info("event=ticket_dynamic_values_returned employeeId={} ticketId={} resultCount={}",
                 employeeId, ticketId, dynamicValues.size());
         return new TicketDynamicValuesResponse(ticketId, dynamicValues);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<CustomerLookupResponse> lookupCustomerByMobileNumber(String mobileNumber) {
+        String normalizedMobileNumber = mobileNumber == null ? "" : mobileNumber.trim();
+        if (!normalizedMobileNumber.matches("\\d{10}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "mobileNumber must contain exactly 10 digits");
+        }
+
+        return repository.findFirstByMobileNumberOrderByCreatedAtDesc(normalizedMobileNumber)
+                .map(CustomerLookupResponse::from);
     }
 
     @Transactional(readOnly = true)

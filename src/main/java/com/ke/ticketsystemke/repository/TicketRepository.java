@@ -24,6 +24,8 @@ public interface TicketRepository
 
     Optional<Ticket> findFirstByTicketNumberIgnoreCase(String ticketNumber);
 
+    Optional<Ticket> findFirstByMobileNumberOrderByCreatedAtDesc(String mobileNumber);
+
     List<Ticket> findTop10ByMobileNumberAndIdNotOrderByCreatedAtDesc(String mobileNumber, Long id);
 
     @Query(value = """
