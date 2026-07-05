@@ -1,15 +1,19 @@
 package com.ke.ticketsystemke.controller;
 
+import com.ke.ticketsystemke.dto.ChangePasswordRequest;
 import com.ke.ticketsystemke.dto.LoginRequest;
 import com.ke.ticketsystemke.dto.LoginResponse;
+import com.ke.ticketsystemke.dto.MessageResponse;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.RoleRepository;
 import com.ke.ticketsystemke.security.JwtService;
+import com.ke.ticketsystemke.service.EmployeeService;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
@@ -33,6 +37,9 @@ public class AuthController {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private EmployeeService employeeService;
 
     @PostMapping("/employeelogin")
     public ResponseEntity<?> login(
@@ -74,6 +81,15 @@ public class AuthController {
                         employee.getEmployeeId()
                 )
         );
+    }
+
+    @PatchMapping("/change-password")
+    public MessageResponse changePassword(
+            @RequestBody ChangePasswordRequest request,
+            Authentication authentication
+    ) {
+        employeeService.changeOwnPassword(authentication.getName(), request);
+        return new MessageResponse("Password changed successfully");
     }
 
     private String resolveRoleKey(Employee employee) {

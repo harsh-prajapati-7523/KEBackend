@@ -64,6 +64,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
 
                         .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/volt/auth/change-password")
+                        .authenticated()
+
+                        .requestMatchers(
                                 "/volt/auth/**")
                         .permitAll()
 

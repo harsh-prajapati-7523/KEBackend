@@ -1,6 +1,7 @@
 package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.AssignableEmployeeResponse;
+import com.ke.ticketsystemke.dto.ChangePasswordRequest;
 import com.ke.ticketsystemke.dto.CreateEmployeeRequest;
 import com.ke.ticketsystemke.dto.EmployeeResponse;
 import com.ke.ticketsystemke.entity.Employee;
@@ -128,9 +129,54 @@ public class EmployeeService {
         return EmployeeResponse.from(saved);
     }
 
+    @Transactional
+    public void changeOwnPassword(String employeeId, ChangePasswordRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password change request is required");
+        }
+
+        String currentPassword = request.getCurrentPassword();
+        String newPassword = request.getNewPassword();
+        String confirmPassword = request.getConfirmPassword();
+
+        if (isBlank(currentPassword)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is required");
+        }
+        if (isBlank(newPassword)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password is required");
+        }
+        if (isBlank(confirmPassword)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Confirm password is required");
+        }
+        if (!newPassword.equals(confirmPassword)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password and confirm password must match");
+        }
+        if (newPassword.length() < 8) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must contain at least 8 characters");
+        }
+
+        Employee employee = employeeRepository.findByEmployeeIdIgnoreCase(employeeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
+
+        if (!passwordEncoder.matches(currentPassword, employee.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is incorrect");
+        }
+        if (passwordEncoder.matches(newPassword, employee.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must be different from current password");
+        }
+
+        employee.setPassword(passwordEncoder.encode(newPassword));
+        Employee saved = employeeRepository.save(employee);
+        log.info("event=employee_password_changed actorEmployeeId={}", saved.getEmployeeId());
+    }
+
     private Employee fetchEmployee(Long id) {
         return employeeRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private void requireAnotherActiveSuperAdmin(Employee employee, String actorEmployeeId, String reason) {
