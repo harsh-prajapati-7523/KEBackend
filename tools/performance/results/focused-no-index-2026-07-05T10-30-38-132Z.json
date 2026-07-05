@@ -1,0 +1,56 @@
+{
+  "generatedAt": "2026-07-05T10:30:38.138Z",
+  "baseUrl": "https://test.kumar-electricals.com",
+  "indexes": "removed",
+  "results": [
+    {
+      "name": "open-ticket-by-number",
+      "p50": 255.4,
+      "p95": 333.8,
+      "p99": 408.8,
+      "avgBytes": 826
+    },
+    {
+      "name": "smart-suggestions-product",
+      "p50": 275,
+      "p95": 409.9,
+      "p99": 510.4,
+      "avgBytes": 11
+    },
+    {
+      "name": "smart-suggestions-village",
+      "p50": 291.2,
+      "p95": 342.8,
+      "p99": 351.1,
+      "avgBytes": 81
+    },
+    {
+      "name": "find-tickets-default",
+      "p50": 311.5,
+      "p95": 395.9,
+      "p99": 578.8,
+      "avgBytes": 18202
+    },
+    {
+      "name": "find-tickets-search-mobile",
+      "p50": 359.7,
+      "p95": 411.5,
+      "p99": 420.7,
+      "avgBytes": 3383
+    },
+    {
+      "name": "find-tickets-status-filter",
+      "p50": 321,
+      "p95": 517,
+      "p99": 577.7,
+      "avgBytes": 16780
+    },
+    {
+      "name": "my-tickets",
+      "p50": 330.2,
+      "p95": 511.4,
+      "p99": 512.3,
+      "avgBytes": 19167
+    }
+  ]
+}

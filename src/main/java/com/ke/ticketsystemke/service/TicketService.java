@@ -97,6 +97,7 @@ public class TicketService {
     private final GenericTransitionExecutorService genericTransitionExecutorService;
     private final TicketWorkflowHistoryService ticketWorkflowHistoryService;
     private final RepairWorkflowFeatureFlag repairWorkflowFeatureFlag;
+    private final TicketSuggestionService ticketSuggestionService;
 
     public TicketService(
             TicketRepository repository,
@@ -112,7 +113,8 @@ public class TicketService {
             EffectiveStatusResolver effectiveStatusResolver,
             GenericTransitionExecutorService genericTransitionExecutorService,
             TicketWorkflowHistoryService ticketWorkflowHistoryService,
-            RepairWorkflowFeatureFlag repairWorkflowFeatureFlag
+            RepairWorkflowFeatureFlag repairWorkflowFeatureFlag,
+            TicketSuggestionService ticketSuggestionService
     ) {
         this.repository = repository;
         this.employeeRepository = employeeRepository;
@@ -128,6 +130,7 @@ public class TicketService {
         this.genericTransitionExecutorService = genericTransitionExecutorService;
         this.ticketWorkflowHistoryService = ticketWorkflowHistoryService;
         this.repairWorkflowFeatureFlag = repairWorkflowFeatureFlag;
+        this.ticketSuggestionService = ticketSuggestionService;
     }
 
     @Transactional
@@ -157,6 +160,7 @@ public class TicketService {
 
         Ticket saved = repository.save(ticket);
         saveDynamicValues(saved, dynamicValueDrafts);
+        ticketSuggestionService.recordTicketSuggestions(saved.getProductType(), saved.getVillageOrArea(), saved.getCreatedAt());
         return toTicketResponse(saved, BigDecimal.ZERO.setScale(2));
     }
 

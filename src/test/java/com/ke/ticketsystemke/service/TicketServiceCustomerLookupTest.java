@@ -70,6 +70,9 @@ class TicketServiceCustomerLookupTest {
     @Mock
     private RepairWorkflowFeatureFlag repairWorkflowFeatureFlag;
 
+    @Mock
+    private TicketSuggestionService ticketSuggestionService;
+
     private TicketService ticketService;
 
     @BeforeEach
@@ -88,7 +91,8 @@ class TicketServiceCustomerLookupTest {
                 effectiveStatusResolver,
                 genericTransitionExecutorService,
                 ticketWorkflowHistoryService,
-                repairWorkflowFeatureFlag
+                repairWorkflowFeatureFlag,
+                ticketSuggestionService
         );
     }
 

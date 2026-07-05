@@ -1,0 +1,91 @@
+{
+  "generatedAt": "2026-07-05T10:08:58.410Z",
+  "baseUrl": "https://test.kumar-electricals.com",
+  "employeeId": "SUPER_ADMIN_001",
+  "iterations": 25,
+  "warmup": 3,
+  "concurrency": 1,
+  "sampleMobile": "9000000001",
+  "sampleSearch": "9000000001",
+  "sampleTicketId": null,
+  "results": [
+    {
+      "name": "ticket-list-page-0",
+      "iterations": 25,
+      "statusCodes": [
+        200
+      ],
+      "minMs": 288.9,
+      "p50Ms": 312.6,
+      "p95Ms": 407.1,
+      "p99Ms": 427.8,
+      "maxMs": 427.8,
+      "avgBytes": 18202
+    },
+    {
+      "name": "my-tickets-page-0",
+      "iterations": 25,
+      "statusCodes": [
+        200
+      ],
+      "minMs": 298.8,
+      "p50Ms": 339,
+      "p95Ms": 409.5,
+      "p99Ms": 668.7,
+      "maxMs": 668.7,
+      "avgBytes": 19167
+    },
+    {
+      "name": "ticket-search-mobile",
+      "iterations": 25,
+      "statusCodes": [
+        200
+      ],
+      "minMs": 314.4,
+      "p50Ms": 395,
+      "p95Ms": 514.9,
+      "p99Ms": 615.8,
+      "maxMs": 615.8,
+      "avgBytes": 3383
+    },
+    {
+      "name": "ticket-query-date-status",
+      "iterations": 25,
+      "statusCodes": [
+        200
+      ],
+      "minMs": 305.6,
+      "p50Ms": 360.4,
+      "p95Ms": 411.9,
+      "p99Ms": 614.2,
+      "maxMs": 614.2,
+      "avgBytes": 16780
+    },
+    {
+      "name": "customer-lookup-mobile",
+      "iterations": 25,
+      "statusCodes": [
+        200
+      ],
+      "minMs": 253.5,
+      "p50Ms": 290.6,
+      "p95Ms": 407.9,
+      "p99Ms": 410.7,
+      "maxMs": 410.7,
+      "avgBytes": 107
+    },
+    {
+      "name": "create-ticket",
+      "iterations": 25,
+      "statusCodes": [
+        201
+      ],
+      "minMs": 252.6,
+      "p50Ms": 302.6,
+      "p95Ms": 355.8,
+      "p99Ms": 489.8,
+      "maxMs": 489.8,
+      "avgBytes": 857
+    }
+  ]
+}

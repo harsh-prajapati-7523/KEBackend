@@ -80,6 +80,9 @@ class TicketServiceAvailableActionsTest {
     @Mock
     private RepairWorkflowFeatureFlag repairWorkflowFeatureFlag;
 
+    @Mock
+    private TicketSuggestionService ticketSuggestionService;
+
     private TicketService ticketService;
 
     @BeforeEach
@@ -98,7 +101,8 @@ class TicketServiceAvailableActionsTest {
                 effectiveStatusResolver,
                 genericTransitionExecutorService,
                 ticketWorkflowHistoryService,
-                repairWorkflowFeatureFlag
+                repairWorkflowFeatureFlag,
+                ticketSuggestionService
         );
 
         lenient().when(workflowTransitionRepository.findByFromStatusAndActiveTrueOrderBySortOrderAscIdAsc(TicketStatus.IN_PROGRESS))

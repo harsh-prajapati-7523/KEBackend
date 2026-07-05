@@ -1,7 +1,7 @@
 package com.ke.ticketsystemke.service;
 
+import com.ke.ticketsystemke.entity.TicketSuggestionType;
 import com.ke.ticketsystemke.repository.TicketChargeItemRepository;
-import com.ke.ticketsystemke.repository.TicketRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,25 +14,25 @@ public class SuggestionService {
 
     private static final int MAX_QUERY_LENGTH = 120;
 
-    private final TicketRepository ticketRepository;
     private final TicketChargeItemRepository chargeItemRepository;
+    private final TicketSuggestionService ticketSuggestionService;
 
     public SuggestionService(
-            TicketRepository ticketRepository,
-            TicketChargeItemRepository chargeItemRepository
+            TicketChargeItemRepository chargeItemRepository,
+            TicketSuggestionService ticketSuggestionService
     ) {
-        this.ticketRepository = ticketRepository;
         this.chargeItemRepository = chargeItemRepository;
+        this.ticketSuggestionService = ticketSuggestionService;
     }
 
     @Transactional(readOnly = true)
     public List<String> getProductTypes(String query) {
-        return getSuggestions(query, ticketRepository::findProductTypeSuggestions);
+        return ticketSuggestionService.getSuggestions(TicketSuggestionType.PRODUCT_TYPE, query);
     }
 
     @Transactional(readOnly = true)
     public List<String> getVillages(String query) {
-        return getSuggestions(query, ticketRepository::findVillageSuggestions);
+        return ticketSuggestionService.getSuggestions(TicketSuggestionType.VILLAGE_OR_AREA, query);
     }
 
     @Transactional(readOnly = true)
