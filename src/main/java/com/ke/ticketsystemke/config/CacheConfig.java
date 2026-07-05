@@ -23,7 +23,8 @@ public class CacheConfig {
                 CacheNames.WORKFLOW_TRANSITION_OPTIONS,
                 CacheNames.TICKET_CATEGORIES,
                 CacheNames.DROPDOWN_SOURCES,
-                CacheNames.DROPDOWN_OPTIONS
+                CacheNames.DROPDOWN_OPTIONS,
+                CacheNames.TICKET_SUGGESTIONS
         );
         cacheManager.setCaffeine(Caffeine.newBuilder()
                 .maximumSize(1_000)

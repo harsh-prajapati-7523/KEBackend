@@ -1,7 +1,10 @@
 package com.ke.ticketsystemke.service;
 
+import com.ke.ticketsystemke.config.CacheNames;
 import com.ke.ticketsystemke.entity.TicketSuggestionType;
 import com.ke.ticketsystemke.repository.TicketSuggestionTermRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +37,10 @@ public class TicketSuggestionService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = CacheNames.TICKET_SUGGESTIONS,
+            key = "#suggestionType.name() + ':' + (#query == null ? '' : #query.trim().toLowerCase())"
+    )
     public List<String> getSuggestions(TicketSuggestionType suggestionType, String query) {
         String normalizedQuery = normalizeSuggestionQuery(query);
         if (normalizedQuery == null) {
@@ -47,6 +54,7 @@ public class TicketSuggestionService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheNames.TICKET_SUGGESTIONS, allEntries = true)
     public void recordTicketSuggestions(String productType, String villageOrArea, Instant usedAt) {
         upsertSuggestion(TicketSuggestionType.PRODUCT_TYPE, productType, usedAt);
         upsertSuggestion(TicketSuggestionType.VILLAGE_OR_AREA, villageOrArea, usedAt);

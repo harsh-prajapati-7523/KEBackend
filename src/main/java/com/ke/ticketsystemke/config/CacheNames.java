@@ -10,6 +10,7 @@ public final class CacheNames {
     public static final String TICKET_CATEGORIES = "ticketCategories";
     public static final String DROPDOWN_SOURCES = "dropdownSources";
     public static final String DROPDOWN_OPTIONS = "dropdownOptions";
+    public static final String TICKET_SUGGESTIONS = "ticketSuggestions";
 
     private CacheNames() {
     }
