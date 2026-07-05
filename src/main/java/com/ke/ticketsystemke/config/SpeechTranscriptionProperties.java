@@ -128,8 +128,18 @@ public class SpeechTranscriptionProperties {
     }
 
     public static class Google extends Provider {
+        private String applicationCredentials = "";
+
         public Google() {
             setLanguageCode("hi-IN");
+        }
+
+        public String getApplicationCredentials() {
+            return applicationCredentials;
+        }
+
+        public void setApplicationCredentials(String applicationCredentials) {
+            this.applicationCredentials = applicationCredentials;
         }
     }
 

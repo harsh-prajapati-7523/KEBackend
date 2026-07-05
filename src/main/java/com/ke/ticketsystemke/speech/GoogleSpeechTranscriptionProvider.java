@@ -7,13 +7,19 @@ import com.google.cloud.speech.v1.SpeechClient;
 import com.google.cloud.speech.v1.SpeechRecognitionAlternative;
 import com.google.protobuf.ByteString;
 import com.ke.ticketsystemke.config.SpeechTranscriptionProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Locale;
 
 @Component
 public class GoogleSpeechTranscriptionProvider implements SpeechTranscriptionProvider {
+
+    private static final Logger log = LoggerFactory.getLogger(GoogleSpeechTranscriptionProvider.class);
 
     public static final String KEY = "GOOGLE_STT";
 
@@ -30,7 +36,7 @@ public class GoogleSpeechTranscriptionProvider implements SpeechTranscriptionPro
 
     @Override
     public boolean isEnabled() {
-        return properties.getGoogle().isEnabled();
+        return properties.getGoogle().isEnabled() && credentialsPathAbsentOrReadable();
     }
 
     @Override
@@ -79,5 +85,20 @@ public class GoogleSpeechTranscriptionProvider implements SpeechTranscriptionPro
             return RecognitionConfig.AudioEncoding.LINEAR16;
         }
         return RecognitionConfig.AudioEncoding.ENCODING_UNSPECIFIED;
+    }
+
+    private boolean credentialsPathAbsentOrReadable() {
+        String credentialsPath = properties.getGoogle().getApplicationCredentials();
+        if (credentialsPath == null || credentialsPath.isBlank()) {
+            log.info("event=google_stt_credentials mode=application_default_credentials");
+            return true;
+        }
+
+        if (Files.isReadable(Path.of(credentialsPath))) {
+            log.info("event=google_stt_credentials mode=explicit_credentials_path");
+            return true;
+        }
+        log.warn("event=google_stt_credentials mode=explicit_credentials_path status=unreadable");
+        return false;
     }
 }
