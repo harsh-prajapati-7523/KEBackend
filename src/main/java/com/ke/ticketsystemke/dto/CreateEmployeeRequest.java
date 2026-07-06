@@ -20,7 +20,6 @@ public class CreateEmployeeRequest {
     private Long roleId;
 
     @NotBlank
-    @Size(min = 8, message = "password must contain at least 8 characters")
     private String password;
 
     private Boolean active;

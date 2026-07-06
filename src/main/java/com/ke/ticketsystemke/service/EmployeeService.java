@@ -26,6 +26,7 @@ public class EmployeeService {
 
     private static final Logger log = LoggerFactory.getLogger(EmployeeService.class);
     private static final String SUPER_ADMIN_ROLE_KEY = "SUPER_ADMIN";
+    private static final String SIX_DIGIT_PIN_PATTERN = "\\d{6}";
 
     private final EmployeeRepository employeeRepository;
     private final RoleRepository roleRepository;
@@ -63,7 +64,9 @@ public class EmployeeService {
         Employee employee = new Employee();
         employee.setName(request.getName().trim());
         employee.setEmployeeId(employeeId);
-        assignRole(employee, resolveAssignableRole(request.getRoleId(), request.getRole()));
+        Role role = resolveAssignableRole(request.getRoleId(), request.getRole());
+        validateCredential(request.getPassword(), role.getRoleKey());
+        assignRole(employee, role);
         employee.setPassword(passwordEncoder.encode(request.getPassword()));
         employee.setActive(request.getActive() == null || request.getActive());
 
@@ -122,6 +125,7 @@ public class EmployeeService {
     @Transactional
     public EmployeeResponse resetPassword(Long id, String password, String actorEmployeeId) {
         Employee employee = fetchEmployee(id);
+        validateCredential(password, effectiveRoleKey(employee));
         employee.setPassword(passwordEncoder.encode(password));
         employee.setFailedLoginAttempts(0);
         employee.setAccountLocked(false);
@@ -142,29 +146,27 @@ public class EmployeeService {
         String confirmPassword = request.getConfirmPassword();
 
         if (isBlank(currentPassword)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current credential is required");
         }
         if (isBlank(newPassword)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password is required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New credential is required");
         }
         if (isBlank(confirmPassword)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Confirm password is required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Confirm credential is required");
         }
         if (!newPassword.equals(confirmPassword)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password and confirm password must match");
-        }
-        if (newPassword.length() < 8) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must contain at least 8 characters");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New credential and confirm credential must match");
         }
 
         Employee employee = employeeRepository.findByEmployeeIdIgnoreCase(employeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid employee"));
 
         if (!passwordEncoder.matches(currentPassword, employee.getPassword())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is incorrect");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current credential is incorrect");
         }
+        validateCredential(newPassword, effectiveRoleKey(employee));
         if (passwordEncoder.matches(newPassword, employee.getPassword())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must be different from current password");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New credential must be different from current credential");
         }
 
         employee.setPassword(passwordEncoder.encode(newPassword));
@@ -179,6 +181,25 @@ public class EmployeeService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private void validateCredential(String credential, String roleKey) {
+        if (isBlank(credential)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, credentialLabel(roleKey) + " is required");
+        }
+        if (SUPER_ADMIN_ROLE_KEY.equals(roleKey)) {
+            if (credential.length() < 8) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password must contain at least 8 characters");
+            }
+            return;
+        }
+        if (!credential.matches(SIX_DIGIT_PIN_PATTERN)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PIN must be exactly 6 digits");
+        }
+    }
+
+    private String credentialLabel(String roleKey) {
+        return SUPER_ADMIN_ROLE_KEY.equals(roleKey) ? "Password" : "PIN";
     }
 
     private void requireAnotherActiveSuperAdmin(Employee employee, String actorEmployeeId, String reason) {

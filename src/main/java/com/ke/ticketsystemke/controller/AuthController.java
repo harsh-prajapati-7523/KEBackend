@@ -1,6 +1,7 @@
 package com.ke.ticketsystemke.controller;
 
 import com.ke.ticketsystemke.dto.ChangePasswordRequest;
+import com.ke.ticketsystemke.dto.LoginModeResponse;
 import com.ke.ticketsystemke.dto.LoginRequest;
 import com.ke.ticketsystemke.dto.LoginResponse;
 import com.ke.ticketsystemke.dto.MessageResponse;
@@ -27,6 +28,8 @@ public class AuthController {
 
         private static final Logger log = LoggerFactory.getLogger(AuthController.class);
         private static final int MAX_FAILED_LOGIN_ATTEMPTS = 3;
+        private static final String SUPER_ADMIN_ROLE_KEY = "SUPER_ADMIN";
+        private static final String SIX_DIGIT_PIN_PATTERN = "\\d{6}";
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -42,6 +45,19 @@ public class AuthController {
 
     @Autowired
     private EmployeeService employeeService;
+
+    @GetMapping("/employee-login-mode")
+    public LoginModeResponse employeeLoginMode(@RequestParam(required = false) String employeeId) {
+        String normalizedEmployeeId = employeeId == null ? "" : employeeId.trim();
+        Employee employee = normalizedEmployeeId.isBlank()
+                ? null
+                : employeeRepository.findByEmployeeIdIgnoreCase(normalizedEmployeeId).orElse(null);
+
+        if (employee != null && SUPER_ADMIN_ROLE_KEY.equals(resolveRoleKey(employee))) {
+            return new LoginModeResponse("PASSWORD");
+        }
+        return new LoginModeResponse("PIN");
+    }
 
     @PostMapping("/employeelogin")
     @Transactional
@@ -72,19 +88,21 @@ public class AuthController {
                     .body("Account is locked. Please contact an administrator to reset your password.");
         }
 
-        if (request.getPassword() == null ||
+        String credential = request.getPassword();
+        boolean requiresPin = !SUPER_ADMIN_ROLE_KEY.equals(resolveRoleKey(employee));
+        if (requiresPin && (credential == null || !credential.matches(SIX_DIGIT_PIN_PATTERN))) {
+            recordFailedLogin(employee, employeeId);
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body("Invalid employee ID or password");
+        }
+
+        if (credential == null ||
                 !passwordEncoder.matches(
-                        request.getPassword(),
+                        credential,
                         employee.getPassword()
                 )) {
-            int failedAttempts = employee.getFailedLoginAttempts() + 1;
-            employee.setFailedLoginAttempts(failedAttempts);
-            if (failedAttempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
-                employee.setAccountLocked(true);
-                log.warn("event=account_locked employeeId={} failedAttempts={}", employeeId, failedAttempts);
-            }
-            employeeRepository.save(employee);
-            log.warn("event=login_failure employeeId={} failedAttempts={}", employeeId, failedAttempts);
+            recordFailedLogin(employee, employeeId);
             return ResponseEntity
                     .status(HttpStatus.UNAUTHORIZED)
                     .body("Invalid employee ID or password");
@@ -109,6 +127,17 @@ public class AuthController {
                         employee.getEmployeeId()
                 )
         );
+    }
+
+    private void recordFailedLogin(Employee employee, String employeeId) {
+        int failedAttempts = employee.getFailedLoginAttempts() + 1;
+        employee.setFailedLoginAttempts(failedAttempts);
+        if (failedAttempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
+            employee.setAccountLocked(true);
+            log.warn("event=account_locked employeeId={} failedAttempts={}", employeeId, failedAttempts);
+        }
+        employeeRepository.save(employee);
+        log.warn("event=login_failure employeeId={} failedAttempts={}", employeeId, failedAttempts);
     }
 
     @PatchMapping("/change-password")

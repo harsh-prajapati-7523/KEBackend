@@ -61,7 +61,6 @@ class AuthControllerLoginLockTest {
         LoginRequest request = request("wrong-password");
 
         when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
-        when(passwordEncoder.matches("wrong-password", "hash")).thenReturn(false);
 
         ResponseEntity<?> response = authController.login(request);
 
@@ -70,6 +69,38 @@ class AuthControllerLoginLockTest {
         assertThat(employee.isAccountLocked()).isTrue();
         verify(employeeRepository).save(employee);
         verify(jwtService, never()).generateToken("EMP001");
+    }
+
+    @Test
+    void loginRejectsNonSuperAdminCredentialThatIsNotSixDigitPin() {
+        Employee employee = employee();
+        LoginRequest request = request("1234567890");
+
+        when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
+
+        ResponseEntity<?> response = authController.login(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(employee.getFailedLoginAttempts()).isEqualTo(1);
+        verify(passwordEncoder, never()).matches("1234567890", "hash");
+        verify(employeeRepository).save(employee);
+    }
+
+    @Test
+    void loginModeUsesPasswordForSuperAdmin() {
+        Employee employee = employee();
+        employee.getRoleRecord().setRoleKey("SUPER_ADMIN");
+
+        when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
+
+        assertThat(authController.employeeLoginMode("EMP001").credentialType()).isEqualTo("PASSWORD");
+    }
+
+    @Test
+    void loginModeUsesPinWhenEmployeeIsUnknown() {
+        when(employeeRepository.findByEmployeeIdIgnoreCase("UNKNOWN")).thenReturn(Optional.empty());
+
+        assertThat(authController.employeeLoginMode("UNKNOWN").credentialType()).isEqualTo("PIN");
     }
 
     @Test
@@ -91,10 +122,10 @@ class AuthControllerLoginLockTest {
     void successfulLoginResetsFailedAttempts() {
         Employee employee = employee();
         employee.setFailedLoginAttempts(2);
-        LoginRequest request = request("correct-password");
+        LoginRequest request = request("123456");
 
         when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
-        when(passwordEncoder.matches("correct-password", "hash")).thenReturn(true);
+        when(passwordEncoder.matches("123456", "hash")).thenReturn(true);
         when(jwtService.generateToken("EMP001")).thenReturn("jwt-token");
 
         ResponseEntity<?> response = authController.login(request);

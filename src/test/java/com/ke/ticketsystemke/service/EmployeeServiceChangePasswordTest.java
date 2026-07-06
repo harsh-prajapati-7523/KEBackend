@@ -2,6 +2,7 @@ package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.dto.ChangePasswordRequest;
 import com.ke.ticketsystemke.entity.Employee;
+import com.ke.ticketsystemke.entity.Role;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.RoleRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,7 +43,7 @@ class EmployeeServiceChangePasswordTest {
 
     @Test
     void changeOwnPasswordValidatesCurrentPasswordAndSavesEncodedNewPassword() {
-        Employee employee = employee("EMP001", "existing-hash");
+        Employee employee = employee("EMP001", "existing-hash", "SUPER_ADMIN");
         ChangePasswordRequest request = request("oldPassword", "newPassword123", "newPassword123");
 
         when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
@@ -59,7 +60,7 @@ class EmployeeServiceChangePasswordTest {
 
     @Test
     void changeOwnPasswordRejectsIncorrectCurrentPassword() {
-        Employee employee = employee("EMP001", "existing-hash");
+        Employee employee = employee("EMP001", "existing-hash", "SUPER_ADMIN");
         ChangePasswordRequest request = request("wrongPassword", "newPassword123", "newPassword123");
 
         when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
@@ -68,7 +69,7 @@ class EmployeeServiceChangePasswordTest {
         assertThatThrownBy(() -> employeeService.changeOwnPassword("EMP001", request))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                    assertThat(ex.getReason()).isEqualTo("Current password is incorrect");
+                    assertThat(ex.getReason()).isEqualTo("Current credential is incorrect");
                 });
 
         verify(employeeRepository, never()).save(employee);
@@ -81,28 +82,49 @@ class EmployeeServiceChangePasswordTest {
         assertThatThrownBy(() -> employeeService.changeOwnPassword("EMP001", request))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                    assertThat(ex.getReason()).isEqualTo("New password and confirm password must match");
+                    assertThat(ex.getReason()).isEqualTo("New credential and confirm credential must match");
                 });
 
         verify(employeeRepository, never()).findByEmployeeIdIgnoreCase("EMP001");
     }
 
     @Test
-    void changeOwnPasswordRejectsShortNewPassword() {
+    void changeOwnPasswordRejectsInvalidRegularEmployeePin() {
+        Employee employee = employee("EMP001", "existing-hash", "TECHNICIAN");
         ChangePasswordRequest request = request("oldPassword", "short", "short");
+
+        when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
+        when(passwordEncoder.matches("oldPassword", "existing-hash")).thenReturn(true);
 
         assertThatThrownBy(() -> employeeService.changeOwnPassword("EMP001", request))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                    assertThat(ex.getReason()).isEqualTo("New password must contain at least 8 characters");
+                    assertThat(ex.getReason()).isEqualTo("PIN must be exactly 6 digits");
                 });
 
-        verify(employeeRepository, never()).findByEmployeeIdIgnoreCase("EMP001");
+        verify(employeeRepository, never()).save(employee);
+    }
+
+    @Test
+    void changeOwnPasswordAcceptsRegularEmployeePin() {
+        Employee employee = employee("EMP001", "existing-hash", "TECHNICIAN");
+        ChangePasswordRequest request = request("oldPassword", "123456", "123456");
+
+        when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
+        when(passwordEncoder.matches("oldPassword", "existing-hash")).thenReturn(true);
+        when(passwordEncoder.matches("123456", "existing-hash")).thenReturn(false);
+        when(passwordEncoder.encode("123456")).thenReturn("new-hash");
+        when(employeeRepository.save(employee)).thenReturn(employee);
+
+        employeeService.changeOwnPassword("EMP001", request);
+
+        assertThat(employee.getPassword()).isEqualTo("new-hash");
+        verify(employeeRepository).save(employee);
     }
 
     @Test
     void changeOwnPasswordRejectsSamePassword() {
-        Employee employee = employee("EMP001", "existing-hash");
+        Employee employee = employee("EMP001", "existing-hash", "SUPER_ADMIN");
         ChangePasswordRequest request = request("oldPassword", "oldPassword", "oldPassword");
 
         when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
@@ -111,7 +133,7 @@ class EmployeeServiceChangePasswordTest {
         assertThatThrownBy(() -> employeeService.changeOwnPassword("EMP001", request))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                    assertThat(ex.getReason()).isEqualTo("New password must be different from current password");
+                    assertThat(ex.getReason()).isEqualTo("New credential must be different from current credential");
                 });
 
         verify(employeeRepository, never()).save(employee);
@@ -119,7 +141,7 @@ class EmployeeServiceChangePasswordTest {
 
     @Test
     void resetPasswordUnlocksAccountAndClearsFailedLoginAttempts() {
-        Employee employee = employee("EMP001", "existing-hash");
+        Employee employee = employee("EMP001", "existing-hash", "SUPER_ADMIN");
         employee.setAccountLocked(true);
         employee.setFailedLoginAttempts(3);
 
@@ -135,11 +157,17 @@ class EmployeeServiceChangePasswordTest {
         verify(employeeRepository).save(employee);
     }
 
-    private Employee employee(String employeeId, String password) {
+    private Employee employee(String employeeId, String password, String roleKey) {
+        Role role = new Role();
+        role.setRoleKey(roleKey);
+        role.setDisplayName(roleKey);
+        role.setActive(true);
+
         Employee employee = new Employee();
         employee.setEmployeeId(employeeId);
         employee.setName("Employee");
         employee.setPassword(password);
+        employee.setRoleRecord(role);
         return employee;
     }
 
