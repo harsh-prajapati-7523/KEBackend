@@ -235,6 +235,29 @@ public class AuthController {
         }
     }
 
+    @PostMapping("/pin/reset")
+    @Transactional
+    public ResponseEntity<MessageResponse> resetPin(
+            @CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String rawRefreshToken
+    ) {
+        try {
+            EmployeeRefreshToken refreshToken = refreshTokenService.validate(rawRefreshToken);
+            Employee employee = refreshToken.getEmployee();
+            employee.setPinHash(null);
+            employee.setPinSetAt(null);
+            employee.setPinUpdatedAt(null);
+            employeeRepository.save(employee);
+            log.info("event=pin_reset_success employeeId={}", employee.getEmployeeId());
+        } catch (Exception ex) {
+            log.warn("event=pin_reset_without_valid_session reason={}", ex.getClass().getSimpleName());
+        }
+
+        refreshTokenService.revoke(rawRefreshToken);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, clearRefreshCookie().toString())
+                .body(new MessageResponse("PIN reset successfully"));
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<MessageResponse> logout(
             @CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String rawRefreshToken
