@@ -5,6 +5,7 @@ import com.ke.ticketsystemke.dto.LoginRequest;
 import com.ke.ticketsystemke.dto.LoginResponse;
 import com.ke.ticketsystemke.dto.MessageResponse;
 import com.ke.ticketsystemke.dto.PinLoginRequest;
+import com.ke.ticketsystemke.dto.PinLoginStatusResponse;
 import com.ke.ticketsystemke.dto.PinSetupRequest;
 import com.ke.ticketsystemke.dto.PinSetupResponse;
 import com.ke.ticketsystemke.entity.Employee;
@@ -216,6 +217,21 @@ public class AuthController {
         } catch (Exception ex) {
             log.warn("event=pin_login_failure reason={}", ex.getClass().getSimpleName());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid session or PIN");
+        }
+    }
+
+    @PostMapping("/pin/status")
+    @Transactional(readOnly = true)
+    public PinLoginStatusResponse pinLoginStatus(
+            @CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String rawRefreshToken
+    ) {
+        try {
+            EmployeeRefreshToken refreshToken = refreshTokenService.validate(rawRefreshToken);
+            Employee employee = refreshToken.getEmployee();
+            boolean pinAvailable = employee.getPinHash() != null && !hasInactiveRole(employee);
+            return new PinLoginStatusResponse(pinAvailable);
+        } catch (Exception ex) {
+            return new PinLoginStatusResponse(false);
         }
     }
 
