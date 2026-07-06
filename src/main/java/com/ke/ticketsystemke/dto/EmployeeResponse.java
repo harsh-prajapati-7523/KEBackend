@@ -15,6 +15,8 @@ public record EmployeeResponse(
         String roleKey,
         String roleDisplayName,
         boolean active,
+        boolean accountLocked,
+        int failedLoginAttempts,
         Instant createdAt
 ) {
     public static EmployeeResponse from(Employee employee) {
@@ -29,6 +31,8 @@ public record EmployeeResponse(
                 roleKey,
                 roleRecord != null ? roleRecord.getDisplayName() : null,
                 employee.isActive(),
+                employee.isAccountLocked(),
+                employee.getFailedLoginAttempts(),
                 employee.getCreatedAt()
         );
     }

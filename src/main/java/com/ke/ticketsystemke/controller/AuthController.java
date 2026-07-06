@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -25,6 +26,7 @@ import org.slf4j.MDC;
 public class AuthController {
 
         private static final Logger log = LoggerFactory.getLogger(AuthController.class);
+        private static final int MAX_FAILED_LOGIN_ATTEMPTS = 3;
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -42,6 +44,7 @@ public class AuthController {
     private EmployeeService employeeService;
 
     @PostMapping("/employeelogin")
+    @Transactional
     public ResponseEntity<?> login(
             @RequestBody LoginRequest request
     ) {
@@ -55,16 +58,41 @@ public class AuthController {
 
         if (employee == null ||
                 !employee.isActive() ||
-                hasInactiveRole(employee) ||
-                request.getPassword() == null ||
-                !passwordEncoder.matches(
-                        request.getPassword(),
-                        employee.getPassword()
-                )) {
+                hasInactiveRole(employee)) {
             log.warn("event=login_failure employeeId={}", employeeId);
             return ResponseEntity
                     .status(HttpStatus.UNAUTHORIZED)
                     .body("Invalid employee ID or password");
+        }
+
+        if (employee.isAccountLocked()) {
+            log.warn("event=login_failure employeeId={} reason=account_locked", employeeId);
+            return ResponseEntity
+                    .status(HttpStatus.LOCKED)
+                    .body("Account is locked. Please contact an administrator to reset your password.");
+        }
+
+        if (request.getPassword() == null ||
+                !passwordEncoder.matches(
+                        request.getPassword(),
+                        employee.getPassword()
+                )) {
+            int failedAttempts = employee.getFailedLoginAttempts() + 1;
+            employee.setFailedLoginAttempts(failedAttempts);
+            if (failedAttempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
+                employee.setAccountLocked(true);
+                log.warn("event=account_locked employeeId={} failedAttempts={}", employeeId, failedAttempts);
+            }
+            employeeRepository.save(employee);
+            log.warn("event=login_failure employeeId={} failedAttempts={}", employeeId, failedAttempts);
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body("Invalid employee ID or password");
+        }
+
+        if (employee.getFailedLoginAttempts() != 0) {
+            employee.setFailedLoginAttempts(0);
+            employeeRepository.save(employee);
         }
 
         String token = jwtService.generateToken(employee.getEmployeeId());

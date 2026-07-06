@@ -123,9 +123,11 @@ public class EmployeeService {
     public EmployeeResponse resetPassword(Long id, String password, String actorEmployeeId) {
         Employee employee = fetchEmployee(id);
         employee.setPassword(passwordEncoder.encode(password));
+        employee.setFailedLoginAttempts(0);
+        employee.setAccountLocked(false);
         Employee saved = employeeRepository.save(employee);
-        log.info("event=employee_password_reset actorEmployeeId={} targetEmployeeId={}",
-                actorEmployeeId, saved.getEmployeeId());
+        log.info("event=employee_password_reset actorEmployeeId={} targetEmployeeId={} accountLocked={} failedAttempts={}",
+                actorEmployeeId, saved.getEmployeeId(), saved.isAccountLocked(), saved.getFailedLoginAttempts());
         return EmployeeResponse.from(saved);
     }
 

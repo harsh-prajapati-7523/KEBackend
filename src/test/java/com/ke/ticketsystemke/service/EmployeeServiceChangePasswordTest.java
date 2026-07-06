@@ -117,6 +117,24 @@ class EmployeeServiceChangePasswordTest {
         verify(employeeRepository, never()).save(employee);
     }
 
+    @Test
+    void resetPasswordUnlocksAccountAndClearsFailedLoginAttempts() {
+        Employee employee = employee("EMP001", "existing-hash");
+        employee.setAccountLocked(true);
+        employee.setFailedLoginAttempts(3);
+
+        when(employeeRepository.findById(10L)).thenReturn(Optional.of(employee));
+        when(passwordEncoder.encode("newPassword123")).thenReturn("new-hash");
+        when(employeeRepository.save(employee)).thenReturn(employee);
+
+        employeeService.resetPassword(10L, "newPassword123", "ADMIN001");
+
+        assertThat(employee.getPassword()).isEqualTo("new-hash");
+        assertThat(employee.isAccountLocked()).isFalse();
+        assertThat(employee.getFailedLoginAttempts()).isZero();
+        verify(employeeRepository).save(employee);
+    }
+
     private Employee employee(String employeeId, String password) {
         Employee employee = new Employee();
         employee.setEmployeeId(employeeId);

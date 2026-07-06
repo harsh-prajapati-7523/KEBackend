@@ -32,6 +32,12 @@ public class Employee {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int failedLoginAttempts = 0;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean accountLocked = false;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -88,6 +94,22 @@ public class Employee {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public int getFailedLoginAttempts() {
+        return failedLoginAttempts;
+    }
+
+    public void setFailedLoginAttempts(int failedLoginAttempts) {
+        this.failedLoginAttempts = failedLoginAttempts;
+    }
+
+    public boolean isAccountLocked() {
+        return accountLocked;
+    }
+
+    public void setAccountLocked(boolean accountLocked) {
+        this.accountLocked = accountLocked;
     }
 
     public Instant getCreatedAt() {
