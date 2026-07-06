@@ -44,6 +44,9 @@ public class Employee {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int failedLoginAttempts = 0;
 
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int pinFailedAttempts = 0;
+
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean accountLocked = false;
 
@@ -135,6 +138,14 @@ public class Employee {
 
     public void setFailedLoginAttempts(int failedLoginAttempts) {
         this.failedLoginAttempts = failedLoginAttempts;
+    }
+
+    public int getPinFailedAttempts() {
+        return pinFailedAttempts;
+    }
+
+    public void setPinFailedAttempts(int pinFailedAttempts) {
+        this.pinFailedAttempts = pinFailedAttempts;
     }
 
     public boolean isAccountLocked() {

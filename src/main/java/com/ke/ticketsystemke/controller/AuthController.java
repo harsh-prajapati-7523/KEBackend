@@ -38,6 +38,7 @@ public class AuthController {
 
         private static final Logger log = LoggerFactory.getLogger(AuthController.class);
         private static final int MAX_FAILED_LOGIN_ATTEMPTS = 3;
+        private static final int MAX_FAILED_PIN_ATTEMPTS = 5;
         private static final String SIX_DIGIT_PIN_PATTERN = "\\d{6}";
         private static final String REFRESH_TOKEN_COOKIE = "ke_refresh_token";
         private static final String REFRESH_TOKEN_COOKIE_PATH = "/volt/auth";
@@ -183,6 +184,7 @@ public class AuthController {
             employee.setPinSetAt(now);
         }
         employee.setPinUpdatedAt(now);
+        employee.setPinFailedAttempts(0);
         employeeRepository.save(employee);
         log.info("event=pin_setup_success employeeId={}", employee.getEmployeeId());
         return ResponseEntity.ok(new PinSetupResponse(true, true));
@@ -204,11 +206,13 @@ public class AuthController {
 
             String pin = request == null ? null : request.getPin();
             if (pin == null || !pin.matches(SIX_DIGIT_PIN_PATTERN) || !passwordEncoder.matches(pin, employee.getPinHash())) {
-                // TODO: Add dedicated PIN attempt throttling when a shared rate-limit foundation is available.
-                log.warn("event=pin_login_failure employeeId={}", employee.getEmployeeId());
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid session or PIN");
+                return recordFailedPinLogin(employee, rawRefreshToken);
             }
 
+            if (employee.getPinFailedAttempts() != 0) {
+                employee.setPinFailedAttempts(0);
+                employeeRepository.save(employee);
+            }
             IssuedRefreshToken rotatedRefreshToken = refreshTokenService.rotate(rawRefreshToken, userAgent(servletRequest), ipAddress(servletRequest));
             String accessToken = jwtService.generateToken(employee.getEmployeeId());
             log.info("event=pin_login_success employeeId={}", employee.getEmployeeId());
@@ -243,9 +247,7 @@ public class AuthController {
         try {
             EmployeeRefreshToken refreshToken = refreshTokenService.validate(rawRefreshToken);
             Employee employee = refreshToken.getEmployee();
-            employee.setPinHash(null);
-            employee.setPinSetAt(null);
-            employee.setPinUpdatedAt(null);
+            clearEmployeePin(employee);
             employeeRepository.save(employee);
             log.info("event=pin_reset_success employeeId={}", employee.getEmployeeId());
         } catch (Exception ex) {
@@ -277,6 +279,34 @@ public class AuthController {
         }
         employeeRepository.save(employee);
         log.warn("event=login_failure employeeId={} failedAttempts={}", employeeId, failedAttempts);
+    }
+
+    private ResponseEntity<MessageResponse> recordFailedPinLogin(Employee employee, String rawRefreshToken) {
+        int failedAttempts = employee.getPinFailedAttempts() + 1;
+        if (failedAttempts >= MAX_FAILED_PIN_ATTEMPTS) {
+            clearEmployeePin(employee);
+            employeeRepository.save(employee);
+            refreshTokenService.revoke(rawRefreshToken);
+            log.warn("event=pin_reset_after_failed_attempts employeeId={} failedAttempts={}", employee.getEmployeeId(), failedAttempts);
+            return ResponseEntity
+                    .status(HttpStatus.LOCKED)
+                    .header(HttpHeaders.SET_COOKIE, clearRefreshCookie().toString())
+                    .body(new MessageResponse("PIN reset after too many invalid attempts"));
+        }
+
+        employee.setPinFailedAttempts(failedAttempts);
+        employeeRepository.save(employee);
+        log.warn("event=pin_login_failure employeeId={} failedAttempts={}", employee.getEmployeeId(), failedAttempts);
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new MessageResponse("Invalid session or PIN"));
+    }
+
+    private void clearEmployeePin(Employee employee) {
+        employee.setPinHash(null);
+        employee.setPinSetAt(null);
+        employee.setPinUpdatedAt(null);
+        employee.setPinFailedAttempts(0);
     }
 
     @PatchMapping("/change-password")
