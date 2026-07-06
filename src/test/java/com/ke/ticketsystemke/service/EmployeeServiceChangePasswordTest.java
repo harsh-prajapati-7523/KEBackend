@@ -69,7 +69,7 @@ class EmployeeServiceChangePasswordTest {
         assertThatThrownBy(() -> employeeService.changeOwnPassword("EMP001", request))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                    assertThat(ex.getReason()).isEqualTo("Current credential is incorrect");
+                    assertThat(ex.getReason()).isEqualTo("Current password is incorrect");
                 });
 
         verify(employeeRepository, never()).save(employee);
@@ -82,44 +82,23 @@ class EmployeeServiceChangePasswordTest {
         assertThatThrownBy(() -> employeeService.changeOwnPassword("EMP001", request))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                    assertThat(ex.getReason()).isEqualTo("New credential and confirm credential must match");
+                    assertThat(ex.getReason()).isEqualTo("New password and confirm password must match");
                 });
 
         verify(employeeRepository, never()).findByEmployeeIdIgnoreCase("EMP001");
     }
 
     @Test
-    void changeOwnPasswordRejectsInvalidRegularEmployeePin() {
-        Employee employee = employee("EMP001", "existing-hash", "TECHNICIAN");
+    void changeOwnPasswordRejectsShortNewPassword() {
         ChangePasswordRequest request = request("oldPassword", "short", "short");
-
-        when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
-        when(passwordEncoder.matches("oldPassword", "existing-hash")).thenReturn(true);
 
         assertThatThrownBy(() -> employeeService.changeOwnPassword("EMP001", request))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                    assertThat(ex.getReason()).isEqualTo("PIN must be exactly 6 digits");
+                    assertThat(ex.getReason()).isEqualTo("New password must contain at least 8 characters");
                 });
 
-        verify(employeeRepository, never()).save(employee);
-    }
-
-    @Test
-    void changeOwnPasswordAcceptsRegularEmployeePin() {
-        Employee employee = employee("EMP001", "existing-hash", "TECHNICIAN");
-        ChangePasswordRequest request = request("oldPassword", "123456", "123456");
-
-        when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
-        when(passwordEncoder.matches("oldPassword", "existing-hash")).thenReturn(true);
-        when(passwordEncoder.matches("123456", "existing-hash")).thenReturn(false);
-        when(passwordEncoder.encode("123456")).thenReturn("new-hash");
-        when(employeeRepository.save(employee)).thenReturn(employee);
-
-        employeeService.changeOwnPassword("EMP001", request);
-
-        assertThat(employee.getPassword()).isEqualTo("new-hash");
-        verify(employeeRepository).save(employee);
+        verify(employeeRepository, never()).findByEmployeeIdIgnoreCase("EMP001");
     }
 
     @Test
@@ -133,7 +112,7 @@ class EmployeeServiceChangePasswordTest {
         assertThatThrownBy(() -> employeeService.changeOwnPassword("EMP001", request))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                    assertThat(ex.getReason()).isEqualTo("New credential must be different from current credential");
+                    assertThat(ex.getReason()).isEqualTo("New password must be different from current password");
                 });
 
         verify(employeeRepository, never()).save(employee);

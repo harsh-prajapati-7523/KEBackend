@@ -21,6 +21,15 @@ public class Employee {
     @Column(nullable = false)
     private String password;
 
+    @Column
+    private String pinHash;
+
+    @Column
+    private Instant pinSetAt;
+
+    @Column
+    private Instant pinUpdatedAt;
+
     @Enumerated(EnumType.STRING)
     @Column
     private EmployeeRole role;
@@ -70,6 +79,30 @@ public class Employee {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getPinHash() {
+        return pinHash;
+    }
+
+    public void setPinHash(String pinHash) {
+        this.pinHash = pinHash;
+    }
+
+    public Instant getPinSetAt() {
+        return pinSetAt;
+    }
+
+    public void setPinSetAt(Instant pinSetAt) {
+        this.pinSetAt = pinSetAt;
+    }
+
+    public Instant getPinUpdatedAt() {
+        return pinUpdatedAt;
+    }
+
+    public void setPinUpdatedAt(Instant pinUpdatedAt) {
+        this.pinUpdatedAt = pinUpdatedAt;
     }
 
     public EmployeeRole getRole() {

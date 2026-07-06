@@ -30,7 +30,7 @@ public class SecurityConfig {
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    @Value("${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}")
+    @Value("${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,https://kumar-electricals.com,https://www.kumar-electricals.com,https://test.kumar-electricals.com}")
     private String corsAllowedOrigins;
 
     @Bean
@@ -66,6 +66,11 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/volt/auth/change-password")
+                        .authenticated()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/volt/auth/pin/setup")
                         .authenticated()
 
                         .requestMatchers(
@@ -246,6 +251,7 @@ public class SecurityConfig {
                         "Content-Type"
                 )
         );
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();

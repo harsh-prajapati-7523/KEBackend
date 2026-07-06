@@ -7,6 +7,8 @@ import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.RoleRepository;
 import com.ke.ticketsystemke.security.JwtService;
 import com.ke.ticketsystemke.service.EmployeeService;
+import com.ke.ticketsystemke.service.RefreshTokenService;
+import com.ke.ticketsystemke.service.RefreshTokenService.IssuedRefreshToken;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +20,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
+import java.time.Duration;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
@@ -42,6 +46,9 @@ class AuthControllerLoginLockTest {
     @Mock
     private EmployeeService employeeService;
 
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     private AuthController authController;
 
     @BeforeEach
@@ -52,6 +59,7 @@ class AuthControllerLoginLockTest {
         ReflectionTestUtils.setField(authController, "passwordEncoder", passwordEncoder);
         ReflectionTestUtils.setField(authController, "jwtService", jwtService);
         ReflectionTestUtils.setField(authController, "employeeService", employeeService);
+        ReflectionTestUtils.setField(authController, "refreshTokenService", refreshTokenService);
     }
 
     @Test
@@ -62,7 +70,7 @@ class AuthControllerLoginLockTest {
 
         when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
 
-        ResponseEntity<?> response = authController.login(request);
+        ResponseEntity<?> response = authController.login(request, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(employee.getFailedLoginAttempts()).isEqualTo(3);
@@ -72,35 +80,18 @@ class AuthControllerLoginLockTest {
     }
 
     @Test
-    void loginRejectsNonSuperAdminCredentialThatIsNotSixDigitPin() {
+    void loginRejectsBadPassword() {
         Employee employee = employee();
         LoginRequest request = request("1234567890");
 
         when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
+        when(passwordEncoder.matches("1234567890", "hash")).thenReturn(false);
 
-        ResponseEntity<?> response = authController.login(request);
+        ResponseEntity<?> response = authController.login(request, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(employee.getFailedLoginAttempts()).isEqualTo(1);
-        verify(passwordEncoder, never()).matches("1234567890", "hash");
         verify(employeeRepository).save(employee);
-    }
-
-    @Test
-    void loginModeUsesPasswordForSuperAdmin() {
-        Employee employee = employee();
-        employee.getRoleRecord().setRoleKey("SUPER_ADMIN");
-
-        when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
-
-        assertThat(authController.employeeLoginMode("EMP001").credentialType()).isEqualTo("PASSWORD");
-    }
-
-    @Test
-    void loginModeUsesPinWhenEmployeeIsUnknown() {
-        when(employeeRepository.findByEmployeeIdIgnoreCase("UNKNOWN")).thenReturn(Optional.empty());
-
-        assertThat(authController.employeeLoginMode("UNKNOWN").credentialType()).isEqualTo("PIN");
     }
 
     @Test
@@ -111,7 +102,7 @@ class AuthControllerLoginLockTest {
 
         when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
 
-        ResponseEntity<?> response = authController.login(request);
+        ResponseEntity<?> response = authController.login(request, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.LOCKED);
         verify(passwordEncoder, never()).matches("correct-password", "hash");
@@ -122,13 +113,16 @@ class AuthControllerLoginLockTest {
     void successfulLoginResetsFailedAttempts() {
         Employee employee = employee();
         employee.setFailedLoginAttempts(2);
-        LoginRequest request = request("123456");
+        LoginRequest request = request("correct-password");
 
         when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
-        when(passwordEncoder.matches("123456", "hash")).thenReturn(true);
+        when(passwordEncoder.matches("correct-password", "hash")).thenReturn(true);
         when(jwtService.generateToken("EMP001")).thenReturn("jwt-token");
+        when(refreshTokenService.issue(employee, null, null)).thenReturn(
+                new IssuedRefreshToken("refresh-token", "refresh-token-hash", Instant.now().plus(Duration.ofDays(30)), Duration.ofDays(30))
+        );
 
-        ResponseEntity<?> response = authController.login(request);
+        ResponseEntity<?> response = authController.login(request, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(employee.getFailedLoginAttempts()).isZero();
