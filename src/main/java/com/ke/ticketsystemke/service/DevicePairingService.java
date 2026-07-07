@@ -75,12 +75,13 @@ public class DevicePairingService {
         String requestId = randomToken();
         String nonce = randomToken();
         String signature = sign(requestId, nonce, expiresAt.toString());
+        String deviceFingerprint = requireValue(request == null ? null : request.getDeviceFingerprint(), "Device fingerprint is required");
 
         DevicePairingRequest pairingRequest = new DevicePairingRequest();
         pairingRequest.setRequestId(requestId);
         pairingRequest.setNonceHash(sha256(nonce));
         pairingRequest.setStatus(DevicePairingStatus.PENDING);
-        pairingRequest.setDeviceFingerprint(limit(request == null ? null : request.getDeviceFingerprint(), 256));
+        pairingRequest.setDeviceFingerprint(limit(deviceFingerprint, 256));
         pairingRequest.setDeviceLabel(limit(request == null ? null : request.getDeviceLabel(), 120));
         pairingRequest.setExpiresAt(expiresAt);
         pairingRequestRepository.save(pairingRequest);
@@ -126,19 +127,18 @@ public class DevicePairingService {
 
         String requestId = requireValue(request.getRequestId(), "Request ID is required");
         String nonce = requireValue(request.getNonce(), "Nonce is required");
-        String expiresAtValue = requireValue(request.getExpiresAt(), "Expiry is required");
         String signature = requireValue(request.getSignature(), "Signature is required");
-        if (!constantTimeEquals(signature, sign(requestId, nonce, expiresAtValue))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pairing token");
-        }
 
         DevicePairingRequest pairingRequest = pairingRequestRepository.findWithLockByRequestId(requestId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pairing request not found"));
         Instant now = Instant.now();
         if (!pairingRequest.getNonceHash().equals(sha256(nonce))) {
+            log.warn("event=device_pairing_approval_denied requestId={} reason=nonce_mismatch", requestId);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pairing token");
         }
-        if (!pairingRequest.getExpiresAt().toString().equals(expiresAtValue)) {
+        String signedExpiry = pairingRequest.getExpiresAt().toString();
+        if (!constantTimeEquals(signature, sign(requestId, nonce, signedExpiry))) {
+            log.warn("event=device_pairing_approval_denied requestId={} reason=signature_mismatch", requestId);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pairing token");
         }
         if (pairingRequest.getStatus() != DevicePairingStatus.PENDING) {
@@ -176,6 +176,13 @@ public class DevicePairingService {
 
         if (!pairingRequest.getNonceHash().equals(sha256(requireValue(nonce, "Nonce is required")))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pairing token");
+        }
+        String originalFingerprint = pairingRequest.getDeviceFingerprint();
+        String presentedFingerprint = requireValue(deviceFingerprint, "Device fingerprint is required");
+        if (originalFingerprint == null || !originalFingerprint.equals(limit(presentedFingerprint, 256))) {
+            log.warn("event=device_pairing_claim_denied requestId={} reason=device_fingerprint_mismatch",
+                    pairingRequest.getRequestId());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pairing device");
         }
 
         Instant now = Instant.now();
