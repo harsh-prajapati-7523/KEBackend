@@ -32,6 +32,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
@@ -70,7 +71,7 @@ public class DevicePairingService {
 
     @Transactional
     public DevicePairingStartResponse start(DevicePairingStartRequest request) {
-        Instant now = Instant.now();
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
         Instant expiresAt = now.plus(PAIRING_TTL);
         String requestId = randomToken();
         String nonce = randomToken();
@@ -142,6 +143,8 @@ public class DevicePairingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pairing token");
         }
         if (pairingRequest.getStatus() != DevicePairingStatus.PENDING) {
+            log.warn("event=device_pairing_approval_denied requestId={} reason=inactive_status status={}",
+                    requestId, pairingRequest.getStatus());
             throw new ResponseStatusException(HttpStatus.GONE, "Pairing request is no longer active");
         }
         if (pairingRequest.getExpiresAt().isBefore(now)) {
