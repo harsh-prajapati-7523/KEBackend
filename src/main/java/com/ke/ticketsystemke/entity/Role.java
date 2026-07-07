@@ -2,6 +2,8 @@ package com.ke.ticketsystemke.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -30,6 +32,10 @@ public class Role {
 
     @Column(name = "system_role", nullable = false)
     private boolean systemRole = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "authentication_mode", nullable = false, length = 40, columnDefinition = "varchar(40) default 'PASSWORD_PIN'")
+    private AuthenticationMode authenticationMode = AuthenticationMode.PASSWORD_PIN;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -74,6 +80,17 @@ public class Role {
 
     public void setSystemRole(boolean systemRole) {
         this.systemRole = systemRole;
+    }
+
+    public AuthenticationMode getAuthenticationMode() {
+        if ("SUPER_ADMIN".equals(roleKey)) {
+            return AuthenticationMode.PASSWORD_PIN;
+        }
+        return authenticationMode == null ? AuthenticationMode.PASSWORD_PIN : authenticationMode;
+    }
+
+    public void setAuthenticationMode(AuthenticationMode authenticationMode) {
+        this.authenticationMode = authenticationMode == null ? AuthenticationMode.PASSWORD_PIN : authenticationMode;
     }
 
     public Instant getCreatedAt() {

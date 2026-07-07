@@ -1,6 +1,7 @@
 package com.ke.ticketsystemke.dto;
 
 import com.ke.ticketsystemke.entity.Role;
+import com.ke.ticketsystemke.entity.AuthenticationMode;
 
 import java.time.Instant;
 
@@ -10,6 +11,7 @@ public record RoleResponse(
         String displayName,
         boolean active,
         boolean systemRole,
+        AuthenticationMode authenticationMode,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -20,6 +22,7 @@ public record RoleResponse(
                 role.getDisplayName(),
                 role.isActive(),
                 role.isSystemRole(),
+                role.getAuthenticationMode(),
                 role.getCreatedAt(),
                 role.getUpdatedAt()
         );

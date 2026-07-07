@@ -2,6 +2,7 @@ package com.ke.ticketsystemke.config;
 
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.EmployeeRole;
+import com.ke.ticketsystemke.entity.AuthenticationMode;
 import com.ke.ticketsystemke.entity.Role;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.RoleRepository;
@@ -98,6 +99,7 @@ public class BootstrapSuperAdminInitializer implements ApplicationRunner {
         role.setDisplayName("Super Admin");
         role.setActive(true);
         role.setSystemRole(true);
+        role.setAuthenticationMode(AuthenticationMode.PASSWORD_PIN);
         return roleRepository.save(role);
     }
 

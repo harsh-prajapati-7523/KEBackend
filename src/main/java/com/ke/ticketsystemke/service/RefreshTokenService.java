@@ -2,6 +2,7 @@ package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.EmployeeRefreshToken;
+import com.ke.ticketsystemke.repository.EmployeeDeviceSessionRepository;
 import com.ke.ticketsystemke.repository.EmployeeRefreshTokenRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -25,13 +26,16 @@ public class RefreshTokenService {
     private static final int TOKEN_BYTE_LENGTH = 32;
 
     private final EmployeeRefreshTokenRepository refreshTokenRepository;
+    private final EmployeeDeviceSessionRepository deviceSessionRepository;
     private final Duration refreshTokenTtl;
 
     public RefreshTokenService(
             EmployeeRefreshTokenRepository refreshTokenRepository,
+            EmployeeDeviceSessionRepository deviceSessionRepository,
             @Value("${auth.refresh-token.expiration-days:${AUTH_REFRESH_TOKEN_EXPIRATION_DAYS:30}}") long refreshTokenExpirationDays
     ) {
         this.refreshTokenRepository = refreshTokenRepository;
+        this.deviceSessionRepository = deviceSessionRepository;
         this.refreshTokenTtl = Duration.ofDays(refreshTokenExpirationDays);
     }
 
@@ -81,6 +85,11 @@ public class RefreshTokenService {
         currentToken.setRevokedAt(Instant.now());
         currentToken.setReplacedByTokenHash(nextToken.tokenHash());
         refreshTokenRepository.save(currentToken);
+        deviceSessionRepository.findByRefreshTokenHashAndRevokedAtIsNull(currentToken.getTokenHash())
+                .ifPresent(deviceSession -> {
+                    deviceSession.setRefreshTokenHash(nextToken.tokenHash());
+                    deviceSessionRepository.save(deviceSession);
+                });
         return nextToken;
     }
 
@@ -91,6 +100,20 @@ public class RefreshTokenService {
         }
 
         refreshTokenRepository.findByTokenHash(hash(rawToken)).ifPresent(refreshToken -> {
+            if (refreshToken.getRevokedAt() == null) {
+                refreshToken.setRevokedAt(Instant.now());
+                refreshTokenRepository.save(refreshToken);
+            }
+        });
+    }
+
+    @Transactional
+    public void revokeByTokenHash(String tokenHash) {
+        if (tokenHash == null || tokenHash.isBlank()) {
+            return;
+        }
+
+        refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(refreshToken -> {
             if (refreshToken.getRevokedAt() == null) {
                 refreshToken.setRevokedAt(Instant.now());
                 refreshTokenRepository.save(refreshToken);

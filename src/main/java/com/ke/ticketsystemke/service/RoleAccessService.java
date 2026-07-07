@@ -10,6 +10,7 @@ import com.ke.ticketsystemke.dto.UpdateRoleAccessRequest;
 import com.ke.ticketsystemke.dto.UpdateRoleAccessRuleRequest;
 import com.ke.ticketsystemke.entity.AccessKey;
 import com.ke.ticketsystemke.entity.AccessKeyMetadata;
+import com.ke.ticketsystemke.entity.AuthenticationMode;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.Role;
 import com.ke.ticketsystemke.entity.RoleAccessRule;
@@ -92,6 +93,7 @@ public class RoleAccessService {
                 role.getRoleKey(),
                 role.getDisplayName(),
                 isSuperAdmin(role),
+                role.getAuthenticationMode(),
                 rules
         );
     }
@@ -115,6 +117,12 @@ public class RoleAccessService {
         if (request.getRules() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Access rules are required");
         }
+
+        AuthenticationMode nextAuthenticationMode = request.getAuthenticationMode() == null
+                ? role.getAuthenticationMode()
+                : request.getAuthenticationMode();
+        role.setAuthenticationMode(nextAuthenticationMode);
+        roleRepository.save(role);
 
         String lookupActorEmployeeId = actorEmployeeId == null ? "" : actorEmployeeId.trim();
         Employee actor = employeeRepository.findByEmployeeIdIgnoreCase(lookupActorEmployeeId).orElse(null);
@@ -151,6 +159,7 @@ public class RoleAccessService {
                 role.getRoleKey(),
                 role.getDisplayName(),
                 isSuperAdmin(role),
+                role.getAuthenticationMode(),
                 responses
         );
     }

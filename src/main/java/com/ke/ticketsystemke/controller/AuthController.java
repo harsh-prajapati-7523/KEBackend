@@ -1,5 +1,7 @@
 package com.ke.ticketsystemke.controller;
 
+import com.ke.ticketsystemke.dto.AuthenticationConfigRequest;
+import com.ke.ticketsystemke.dto.AuthenticationConfigResponse;
 import com.ke.ticketsystemke.dto.ChangePasswordRequest;
 import com.ke.ticketsystemke.dto.LoginRequest;
 import com.ke.ticketsystemke.dto.LoginResponse;
@@ -8,6 +10,7 @@ import com.ke.ticketsystemke.dto.PinLoginRequest;
 import com.ke.ticketsystemke.dto.PinLoginStatusResponse;
 import com.ke.ticketsystemke.dto.PinSetupRequest;
 import com.ke.ticketsystemke.dto.PinSetupResponse;
+import com.ke.ticketsystemke.entity.AuthenticationMode;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.EmployeeRefreshToken;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
@@ -61,6 +64,19 @@ public class AuthController {
     @Autowired
     private RefreshTokenService refreshTokenService;
 
+    @PostMapping("/config")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> authenticationConfig(@RequestBody AuthenticationConfigRequest request) {
+        String employeeId = request == null || request.getEmployeeId() == null ? "" : request.getEmployeeId().trim();
+        Employee employee = employeeId.isBlank()
+                ? null
+                : employeeRepository.findByEmployeeIdIgnoreCase(employeeId).orElse(null);
+        if (employee == null || !employee.isActive() || hasInactiveRole(employee)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Authentication configuration unavailable");
+        }
+        return ResponseEntity.ok(new AuthenticationConfigResponse(resolveAuthenticationMode(employee)));
+    }
+
     @PostMapping("/employeelogin")
     @Transactional
     public ResponseEntity<?> login(
@@ -89,6 +105,13 @@ public class AuthController {
             return ResponseEntity
                     .status(HttpStatus.LOCKED)
                     .body("Account is locked. Please contact an administrator to reset your password.");
+        }
+
+        if (resolveAuthenticationMode(employee) != AuthenticationMode.PASSWORD_PIN) {
+            log.warn("event=login_failure employeeId={} reason=password_flow_not_allowed", employeeId);
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body("Password login is not enabled for this role");
         }
 
         String credential = request.getPassword();
@@ -370,6 +393,17 @@ public class AuthController {
             return employee.getRoleRecord().getRoleKey();
         }
         return employee.getRole() == null ? null : employee.getRole().name();
+    }
+
+    private AuthenticationMode resolveAuthenticationMode(Employee employee) {
+        String role = resolveRoleKey(employee);
+        if ("SUPER_ADMIN".equals(role)) {
+            return AuthenticationMode.PASSWORD_PIN;
+        }
+        if (employee.getRoleRecord() != null) {
+            return employee.getRoleRecord().getAuthenticationMode();
+        }
+        return AuthenticationMode.PASSWORD_PIN;
     }
 
     private boolean hasInactiveRole(Employee employee) {
