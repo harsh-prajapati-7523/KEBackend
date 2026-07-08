@@ -32,19 +32,22 @@ public class BootstrapSuperAdminInitializer implements ApplicationRunner {
     private final PasswordEncoder passwordEncoder;
     private final Environment environment;
     private final String bootstrapPassword;
+    private final boolean resetBootstrapPassword;
 
     public BootstrapSuperAdminInitializer(
             EmployeeRepository employeeRepository,
             RoleRepository roleRepository,
             PasswordEncoder passwordEncoder,
             Environment environment,
-            @Value("${BOOTSTRAP_SUPER_ADMIN_PASSWORD:}") String bootstrapPassword
+            @Value("${BOOTSTRAP_SUPER_ADMIN_PASSWORD:}") String bootstrapPassword,
+            @Value("${BOOTSTRAP_SUPER_ADMIN_RESET_PASSWORD:false}") boolean resetBootstrapPassword
     ) {
         this.employeeRepository = employeeRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.environment = environment;
         this.bootstrapPassword = bootstrapPassword;
+        this.resetBootstrapPassword = resetBootstrapPassword;
     }
 
     @Override
@@ -58,7 +61,9 @@ public class BootstrapSuperAdminInitializer implements ApplicationRunner {
             employee.setRole(EmployeeRole.SUPER_ADMIN);
             employee.setRoleRecord(superAdminRole);
             employee.setActive(true);
-            employee.setPassword(passwordEncoder.encode(resolveBootstrapPassword()));
+            if (resetBootstrapPassword || employee.getPassword() == null || employee.getPassword().isBlank()) {
+                employee.setPassword(passwordEncoder.encode(resolveBootstrapPassword()));
+            }
             employeeRepository.save(employee);
             log.info("event=bootstrap_super_admin_repaired employeeId={} role={}",
                     BOOTSTRAP_EMPLOYEE_ID, EmployeeRole.SUPER_ADMIN);
