@@ -2,6 +2,7 @@ package com.ke.ticketsystemke.service;
 
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.EmployeeRefreshToken;
+import com.ke.ticketsystemke.entity.RefreshTokenAuthLevel;
 import com.ke.ticketsystemke.repository.EmployeeDeviceSessionRepository;
 import com.ke.ticketsystemke.repository.EmployeeRefreshTokenRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,6 +42,11 @@ public class RefreshTokenService {
 
     @Transactional
     public IssuedRefreshToken issue(Employee employee, String userAgent, String ipAddress) {
+        return issue(employee, userAgent, ipAddress, RefreshTokenAuthLevel.FULL);
+    }
+
+    @Transactional
+    public IssuedRefreshToken issue(Employee employee, String userAgent, String ipAddress, RefreshTokenAuthLevel authLevel) {
         String rawToken = generateToken();
         String tokenHash = hash(rawToken);
         Instant now = Instant.now();
@@ -52,6 +58,7 @@ public class RefreshTokenService {
         refreshToken.setExpiresAt(now.plus(refreshTokenTtl));
         refreshToken.setUserAgent(limit(userAgent, 512));
         refreshToken.setIpAddress(limit(ipAddress, 64));
+        refreshToken.setAuthLevel(authLevel);
         refreshTokenRepository.save(refreshToken);
 
         return new IssuedRefreshToken(rawToken, tokenHash, refreshToken.getExpiresAt(), refreshTokenTtl);
@@ -80,8 +87,8 @@ public class RefreshTokenService {
 
     @Transactional
     public IssuedRefreshToken rotate(String rawToken, String userAgent, String ipAddress) {
-        EmployeeRefreshToken currentToken = validate(rawToken);
-        IssuedRefreshToken nextToken = issue(currentToken.getEmployee(), userAgent, ipAddress);
+        EmployeeRefreshToken currentToken = validateWithLock(rawToken);
+        IssuedRefreshToken nextToken = issue(currentToken.getEmployee(), userAgent, ipAddress, currentToken.getAuthLevel());
         currentToken.setRevokedAt(Instant.now());
         currentToken.setReplacedByTokenHash(nextToken.tokenHash());
         refreshTokenRepository.save(currentToken);
@@ -91,6 +98,84 @@ public class RefreshTokenService {
                     deviceSessionRepository.save(deviceSession);
                 });
         return nextToken;
+    }
+
+    @Transactional
+    public IssuedRefreshToken rotateToFull(String rawToken, String userAgent, String ipAddress) {
+        EmployeeRefreshToken currentToken = validateWithLock(rawToken);
+        IssuedRefreshToken nextToken = issue(currentToken.getEmployee(), userAgent, ipAddress, RefreshTokenAuthLevel.FULL);
+        currentToken.setRevokedAt(Instant.now());
+        currentToken.setReplacedByTokenHash(nextToken.tokenHash());
+        refreshTokenRepository.save(currentToken);
+        deviceSessionRepository.findByRefreshTokenHashAndRevokedAtIsNull(currentToken.getTokenHash())
+                .ifPresent(deviceSession -> {
+                    deviceSession.setRefreshTokenHash(nextToken.tokenHash());
+                    deviceSessionRepository.save(deviceSession);
+                });
+        return nextToken;
+    }
+
+    @Transactional(readOnly = true)
+    public EmployeeRefreshToken validateFull(String rawToken) {
+        EmployeeRefreshToken refreshToken = validate(rawToken);
+        if (refreshToken.getAuthLevel() != RefreshTokenAuthLevel.FULL) {
+            throw invalidRefreshToken();
+        }
+        return refreshToken;
+    }
+
+    @Transactional(readOnly = true)
+    public EmployeeRefreshToken validateFullByTokenHash(String tokenHash) {
+        EmployeeRefreshToken refreshToken = validateByTokenHash(tokenHash);
+        if (refreshToken.getAuthLevel() != RefreshTokenAuthLevel.FULL) {
+            throw invalidRefreshToken();
+        }
+        return refreshToken;
+    }
+
+    @Transactional(readOnly = true)
+    public EmployeeRefreshToken validatePrePinByTokenHash(String tokenHash) {
+        EmployeeRefreshToken refreshToken = validateByTokenHash(tokenHash);
+        if (refreshToken.getAuthLevel() != RefreshTokenAuthLevel.PRE_PIN) {
+            throw invalidRefreshToken();
+        }
+        return refreshToken;
+    }
+
+    private EmployeeRefreshToken validateByTokenHash(String tokenHash) {
+        if (tokenHash == null || tokenHash.isBlank()) {
+            throw invalidRefreshToken();
+        }
+        EmployeeRefreshToken refreshToken = refreshTokenRepository.findByTokenHash(tokenHash)
+                .orElseThrow(this::invalidRefreshToken);
+        if (refreshToken.getRevokedAt() != null || !refreshToken.getExpiresAt().isAfter(Instant.now())) {
+            throw invalidRefreshToken();
+        }
+        Employee employee = refreshToken.getEmployee();
+        if (employee == null || !employee.isActive()) {
+            throw invalidRefreshToken();
+        }
+        return refreshToken;
+    }
+
+    private EmployeeRefreshToken validateWithLock(String rawToken) {
+        if (rawToken == null || rawToken.isBlank()) {
+            throw invalidRefreshToken();
+        }
+
+        EmployeeRefreshToken refreshToken = refreshTokenRepository.findWithLockByTokenHash(hash(rawToken))
+                .orElseThrow(this::invalidRefreshToken);
+
+        if (refreshToken.getRevokedAt() != null || !refreshToken.getExpiresAt().isAfter(Instant.now())) {
+            throw invalidRefreshToken();
+        }
+
+        Employee employee = refreshToken.getEmployee();
+        if (employee == null || !employee.isActive()) {
+            throw invalidRefreshToken();
+        }
+
+        return refreshToken;
     }
 
     @Transactional

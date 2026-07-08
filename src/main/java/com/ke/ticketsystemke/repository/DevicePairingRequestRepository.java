@@ -23,4 +23,10 @@ public interface DevicePairingRequestRepository extends JpaRepository<DevicePair
     List<DevicePairingRequest> findTop25ByStatusAndExpiresAtAfterOrderByCreatedAtDesc(DevicePairingStatus status, Instant now);
 
     List<DevicePairingRequest> findAllByStatusAndExpiresAtBefore(DevicePairingStatus status, Instant now);
+
+    List<DevicePairingRequest> findAllByEmployeeEmployeeIdIgnoreCaseAndDeviceFingerprintAndStatus(
+            String employeeId,
+            String deviceFingerprint,
+            DevicePairingStatus status
+    );
 }

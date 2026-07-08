@@ -1,7 +1,9 @@
 package com.ke.ticketsystemke.controller;
 
 import com.ke.ticketsystemke.dto.LoginRequest;
+import com.ke.ticketsystemke.dto.LoginResponse;
 import com.ke.ticketsystemke.entity.Employee;
+import com.ke.ticketsystemke.entity.RefreshTokenAuthLevel;
 import com.ke.ticketsystemke.entity.Role;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.RoleRepository;
@@ -113,21 +115,23 @@ class AuthControllerLoginLockTest {
     void successfulLoginResetsFailedAttempts() {
         Employee employee = employee();
         employee.setFailedLoginAttempts(2);
+        employee.setPinHash("pin-hash");
         LoginRequest request = request("correct-password");
 
         when(employeeRepository.findByEmployeeIdIgnoreCase("EMP001")).thenReturn(Optional.of(employee));
         when(passwordEncoder.matches("correct-password", "hash")).thenReturn(true);
-        when(jwtService.generateToken("EMP001")).thenReturn("jwt-token");
-        when(refreshTokenService.issue(employee, null, null)).thenReturn(
+        when(refreshTokenService.issue(employee, null, null, RefreshTokenAuthLevel.PRE_PIN)).thenReturn(
                 new IssuedRefreshToken("refresh-token", "refresh-token-hash", Instant.now().plus(Duration.ofDays(30)), Duration.ofDays(30))
         );
 
         ResponseEntity<?> response = authController.login(request, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(((LoginResponse) response.getBody()).getToken()).isNull();
         assertThat(employee.getFailedLoginAttempts()).isZero();
         assertThat(employee.isAccountLocked()).isFalse();
         verify(employeeRepository).save(employee);
+        verify(jwtService, never()).generateToken("EMP001");
     }
 
     private Employee employee() {

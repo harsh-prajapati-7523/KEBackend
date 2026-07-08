@@ -3,6 +3,8 @@ package com.ke.ticketsystemke.security;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.RoleRepository;
+import com.ke.ticketsystemke.service.RefreshTokenService;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,6 +44,9 @@ public class JwtAuthenticationFilter
     @Autowired
     private RoleRepository roleRepository;
 
+    @Autowired
+    private RefreshTokenService refreshTokenService;
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
@@ -66,7 +71,10 @@ public class JwtAuthenticationFilter
 
         try {
 
-            String employeeId = jwtService.extractEmployeeId(token);
+            Claims claims = jwtService.extractClaims(token);
+            String employeeId = jwtService.extractEmployeeId(claims);
+            String tokenUse = jwtService.extractTokenUse(claims);
+            String sessionHash = jwtService.extractSessionHash(claims);
 
             String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
 
@@ -79,6 +87,14 @@ public class JwtAuthenticationFilter
             }
             if (hasInactiveRole(employee)) {
                 throw new IllegalStateException("Inactive role");
+            }
+            if (JwtService.TOKEN_USE_PIN_SETUP.equals(tokenUse)) {
+                if (!isPinSetupRequest(request)) {
+                    throw new IllegalStateException("Pin setup token cannot access this endpoint");
+                }
+                refreshTokenService.validatePrePinByTokenHash(sessionHash);
+            } else {
+                refreshTokenService.validateFullByTokenHash(sessionHash);
             }
 
             String role = resolveRoleKey(employee);
@@ -133,5 +149,10 @@ public class JwtAuthenticationFilter
                     .orElse(true);
         }
         return true;
+    }
+
+    private boolean isPinSetupRequest(HttpServletRequest request) {
+        return "POST".equalsIgnoreCase(request.getMethod())
+                && "/volt/auth/pin/setup".equals(request.getRequestURI());
     }
 }

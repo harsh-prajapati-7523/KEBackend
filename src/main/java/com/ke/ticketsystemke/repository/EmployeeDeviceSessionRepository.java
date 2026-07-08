@@ -10,5 +10,7 @@ public interface EmployeeDeviceSessionRepository extends JpaRepository<EmployeeD
 
     Optional<EmployeeDeviceSession> findByRefreshTokenHashAndRevokedAtIsNull(String refreshTokenHash);
 
+    List<EmployeeDeviceSession> findAllByEmployeeEmployeeIdIgnoreCaseAndDeviceFingerprintAndRevokedAtIsNull(String employeeId, String deviceFingerprint);
+
     List<EmployeeDeviceSession> findAllByRevokedAtIsNullOrderByTrustedAtDesc();
 }

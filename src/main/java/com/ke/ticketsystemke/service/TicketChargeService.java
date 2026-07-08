@@ -45,12 +45,9 @@ public class TicketChargeService {
     public ChargeListResponse listCharges(Long ticketId, String employeeId) {
         Ticket ticket = fetchTicket(ticketId);
 
-        List<ChargeItemResponse> chargeItems = chargeRepository.findAllByTicketAndDeletedAtIsNullOrderByCreatedAtAsc(ticket)
-                .stream()
-                .map(ChargeItemResponse::from)
-                .collect(Collectors.toList());
-
-        BigDecimal totalCharge = calculateTotalCharge(ticket);
+        List<TicketChargeItem> activeChargeItems = chargeRepository.findAllByTicketAndDeletedAtIsNullOrderByCreatedAtAsc(ticket);
+        List<ChargeItemResponse> chargeItems = toChargeItemResponses(activeChargeItems);
+        BigDecimal totalCharge = calculateTotalCharge(activeChargeItems);
         log.info("event=charge_list_requested ticketId={} ticketNumber={} employeeId={}", ticketId, ticket.getTicketNumber(), employeeId);
         log.info("event=charge_total_calculated ticketId={} ticketNumber={} totalCharge={}", ticketId, ticket.getTicketNumber(), totalCharge);
 
@@ -81,7 +78,7 @@ public class TicketChargeService {
                 ticket.getStatus());
         log.info("event=charge_total_calculated ticketId={} ticketNumber={} totalCharge={}", ticketId, ticket.getTicketNumber(), totalCharge);
 
-        return buildChargeListResponse(ticket);
+        return buildChargeListResponse(ticket, totalCharge);
     }
 
     @Transactional
@@ -106,7 +103,7 @@ public class TicketChargeService {
                 ticket.getStatus());
         log.info("event=charge_total_calculated ticketId={} ticketNumber={} totalCharge={}", ticketId, ticket.getTicketNumber(), totalCharge);
 
-        return buildChargeListResponse(ticket);
+        return buildChargeListResponse(ticket, totalCharge);
     }
 
     public BigDecimal calculateTotalCharge(Long ticketId) {
@@ -137,11 +134,28 @@ public class TicketChargeService {
     }
 
     private ChargeListResponse buildChargeListResponse(Ticket ticket) {
+        return buildChargeListResponse(ticket, calculateTotalCharge(ticket));
+    }
+
+    private ChargeListResponse buildChargeListResponse(Ticket ticket, BigDecimal totalCharge) {
         List<ChargeItemResponse> chargeItems = chargeRepository.findAllByTicketAndDeletedAtIsNullOrderByCreatedAtAsc(ticket)
                 .stream()
                 .map(ChargeItemResponse::from)
                 .collect(Collectors.toList());
-        return new ChargeListResponse(chargeItems, calculateTotalCharge(ticket));
+        return new ChargeListResponse(chargeItems, totalCharge);
+    }
+
+    private List<ChargeItemResponse> toChargeItemResponses(List<TicketChargeItem> chargeItems) {
+        return chargeItems.stream()
+                .map(ChargeItemResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    private BigDecimal calculateTotalCharge(List<TicketChargeItem> chargeItems) {
+        BigDecimal total = chargeItems.stream()
+                .map(TicketChargeItem::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return total.setScale(2, RoundingMode.UNNECESSARY);
     }
 
     private Ticket fetchTicket(Long ticketId) {

@@ -11,6 +11,7 @@ import com.ke.ticketsystemke.entity.DevicePairingRequest;
 import com.ke.ticketsystemke.entity.DevicePairingStatus;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.EmployeeDeviceSession;
+import com.ke.ticketsystemke.entity.RefreshTokenAuthLevel;
 import com.ke.ticketsystemke.repository.DevicePairingRequestRepository;
 import com.ke.ticketsystemke.repository.EmployeeDeviceSessionRepository;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
@@ -76,18 +77,19 @@ public class DevicePairingService {
         String requestId = randomToken();
         String nonce = randomToken();
         String signature = sign(requestId, nonce, expiresAt.toString());
-        String deviceFingerprint = requireValue(request == null ? null : request.getDeviceFingerprint(), "Device fingerprint is required");
+        String deviceFingerprint = limit(requireValue(request == null ? null : request.getDeviceFingerprint(), "Device fingerprint is required"), 256);
         Employee technician = employeeRepository.findByEmployeeIdIgnoreCase(requireValue(request == null ? null : request.getEmployeeId(), "Employee is required"))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee not found"));
         if (!technician.isActive() || effectiveAuthenticationMode(technician) != AuthenticationMode.DEVICE_PAIRING_PIN) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee is not eligible for device pairing");
         }
+        cancelExistingPendingRequests(technician.getEmployeeId(), deviceFingerprint);
 
         DevicePairingRequest pairingRequest = new DevicePairingRequest();
         pairingRequest.setRequestId(requestId);
         pairingRequest.setNonceHash(sha256(nonce));
         pairingRequest.setStatus(DevicePairingStatus.PENDING);
-        pairingRequest.setDeviceFingerprint(limit(deviceFingerprint, 256));
+        pairingRequest.setDeviceFingerprint(deviceFingerprint);
         pairingRequest.setDeviceLabel(limit(request == null ? null : request.getDeviceLabel(), 120));
         pairingRequest.setEmployee(technician);
         pairingRequest.setExpiresAt(expiresAt);
@@ -218,7 +220,8 @@ public class DevicePairingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee is not eligible for device pairing");
         }
 
-        IssuedRefreshToken refreshToken = refreshTokenService.issue(employee, userAgent, ipAddress);
+        boolean needsPinSetup = employee.getPinHash() == null;
+        IssuedRefreshToken refreshToken = refreshTokenService.issue(employee, userAgent, ipAddress, RefreshTokenAuthLevel.PRE_PIN);
         EmployeeDeviceSession session = new EmployeeDeviceSession();
         session.setEmployee(employee);
         session.setDeviceFingerprint(limit(deviceFingerprint == null ? pairingRequest.getDeviceFingerprint() : deviceFingerprint, 256));
@@ -235,14 +238,16 @@ public class DevicePairingService {
         log.info("event=device_session_created requestId={} employeeId={} deviceSessionId={} deviceLabel={}",
                 pairingRequest.getRequestId(), employee.getEmployeeId(), session.getId(), pairingRequest.getDeviceLabel());
 
-        String accessToken = jwtService.generateToken(employee.getEmployeeId());
+        String accessToken = needsPinSetup
+                ? jwtService.generatePinSetupToken(employee.getEmployeeId(), refreshToken.tokenHash())
+                : null;
         String role = effectiveRoleKey(employee);
         LoginResponse loginResponse = new LoginResponse(
                 accessToken,
                 employee.getName(),
                 role,
                 employee.getEmployeeId(),
-                employee.getPinHash() == null
+                needsPinSetup
         );
         return new StatusClaim(DevicePairingStatus.APPROVED.name(), pairingRequest.getExpiresAt(), loginResponse, refreshToken);
     }
@@ -269,9 +274,12 @@ public class DevicePairingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trusted device not found"));
         if (session.getRevokedAt() == null) {
             Instant now = Instant.now();
-            session.setRevokedAt(now);
-            refreshTokenService.revokeByTokenHash(session.getRefreshTokenHash());
-            deviceSessionRepository.save(session);
+            List<EmployeeDeviceSession> sessionsToRevoke = activeSessionsForSameDevice(session);
+            for (EmployeeDeviceSession sessionToRevoke : sessionsToRevoke) {
+                sessionToRevoke.setRevokedAt(now);
+                refreshTokenService.revokeByTokenHash(sessionToRevoke.getRefreshTokenHash());
+            }
+            deviceSessionRepository.saveAll(sessionsToRevoke);
             log.info("event=device_session_revoked deviceSessionId={} actorEmployeeId={} employeeId={} deviceLabel={}",
                     session.getId(),
                     actorEmployeeId,
@@ -279,6 +287,32 @@ public class DevicePairingService {
                     session.getDeviceLabel());
         }
         return toTrustedDeviceResponse(session);
+    }
+
+    private List<EmployeeDeviceSession> activeSessionsForSameDevice(EmployeeDeviceSession session) {
+        Employee employee = session.getEmployee();
+        String employeeId = employee == null ? null : employee.getEmployeeId();
+        String deviceFingerprint = session.getDeviceFingerprint();
+        if (employeeId == null || employeeId.isBlank() || deviceFingerprint == null || deviceFingerprint.isBlank()) {
+            return List.of(session);
+        }
+        List<EmployeeDeviceSession> sessions = deviceSessionRepository
+                .findAllByEmployeeEmployeeIdIgnoreCaseAndDeviceFingerprintAndRevokedAtIsNull(employeeId, deviceFingerprint);
+        return sessions.isEmpty() ? List.of(session) : sessions;
+    }
+
+    private void cancelExistingPendingRequests(String employeeId, String deviceFingerprint) {
+        List<DevicePairingRequest> pendingRequests = pairingRequestRepository
+                .findAllByEmployeeEmployeeIdIgnoreCaseAndDeviceFingerprintAndStatus(
+                        employeeId,
+                        deviceFingerprint,
+                        DevicePairingStatus.PENDING
+                );
+        if (pendingRequests.isEmpty()) {
+            return;
+        }
+        pendingRequests.forEach(request -> request.setStatus(DevicePairingStatus.CANCELLED));
+        pairingRequestRepository.saveAll(pendingRequests);
     }
 
     private DevicePairingRequestResponse toResponse(DevicePairingRequest request) {

@@ -2,6 +2,8 @@ package com.ke.ticketsystemke.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -53,6 +55,10 @@ public class EmployeeRefreshToken {
 
     @Column(name = "ip_address", length = 64)
     private String ipAddress;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_level", nullable = false, length = 20)
+    private RefreshTokenAuthLevel authLevel = RefreshTokenAuthLevel.FULL;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -126,6 +132,14 @@ public class EmployeeRefreshToken {
 
     public void setIpAddress(String ipAddress) {
         this.ipAddress = ipAddress;
+    }
+
+    public RefreshTokenAuthLevel getAuthLevel() {
+        return authLevel == null ? RefreshTokenAuthLevel.FULL : authLevel;
+    }
+
+    public void setAuthLevel(RefreshTokenAuthLevel authLevel) {
+        this.authLevel = authLevel == null ? RefreshTokenAuthLevel.FULL : authLevel;
     }
 
     public Instant getCreatedAt() {

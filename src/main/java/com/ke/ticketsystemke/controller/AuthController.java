@@ -13,6 +13,7 @@ import com.ke.ticketsystemke.dto.PinSetupResponse;
 import com.ke.ticketsystemke.entity.AuthenticationMode;
 import com.ke.ticketsystemke.entity.Employee;
 import com.ke.ticketsystemke.entity.EmployeeRefreshToken;
+import com.ke.ticketsystemke.entity.RefreshTokenAuthLevel;
 import com.ke.ticketsystemke.repository.EmployeeRepository;
 import com.ke.ticketsystemke.repository.RoleRepository;
 import com.ke.ticketsystemke.security.JwtService;
@@ -84,7 +85,7 @@ public class AuthController {
             HttpServletRequest servletRequest
     ) {
 
-        String employeeId = request.getEmployeeId() == null ? "" : request.getEmployeeId().trim();
+        String employeeId = request == null || request.getEmployeeId() == null ? "" : request.getEmployeeId().trim();
         log.info("event=login_attempt employeeId={}", employeeId);
 
         Employee employee = employeeId.isBlank()
@@ -114,7 +115,7 @@ public class AuthController {
                     .body("Password login is not enabled for this role");
         }
 
-        String credential = request.getPassword();
+        String credential = request == null ? null : request.getPassword();
         if (credential == null ||
                 !passwordEncoder.matches(
                         credential,
@@ -131,10 +132,12 @@ public class AuthController {
             employeeRepository.save(employee);
         }
 
-        String token = jwtService.generateToken(employee.getEmployeeId());
-        IssuedRefreshToken refreshToken = refreshTokenService.issue(employee, userAgent(servletRequest), ipAddress(servletRequest));
-
         String role = resolveRoleKey(employee);
+        boolean needsPinSetup = employee.getPinHash() == null;
+        IssuedRefreshToken refreshToken = refreshTokenService.issue(employee, userAgent(servletRequest), ipAddress(servletRequest), RefreshTokenAuthLevel.PRE_PIN);
+        String token = needsPinSetup
+                ? jwtService.generatePinSetupToken(employee.getEmployeeId(), refreshToken.tokenHash())
+                : null;
 
         log.info("event=login_success employeeId={} role={}", employeeId, role);
 
@@ -151,14 +154,14 @@ public class AuthController {
             HttpServletRequest servletRequest
     ) {
         try {
-            EmployeeRefreshToken refreshToken = refreshTokenService.validate(rawRefreshToken);
+            EmployeeRefreshToken refreshToken = refreshTokenService.validateFull(rawRefreshToken);
             Employee employee = refreshToken.getEmployee();
             if (hasInactiveRole(employee)) {
                 throw new IllegalStateException("Inactive role");
             }
 
             IssuedRefreshToken rotatedRefreshToken = refreshTokenService.rotate(rawRefreshToken, userAgent(servletRequest), ipAddress(servletRequest));
-            String accessToken = jwtService.generateToken(employee.getEmployeeId());
+            String accessToken = jwtService.generateToken(employee.getEmployeeId(), rotatedRefreshToken.tokenHash());
             log.info("event=refresh_success employeeId={}", employee.getEmployeeId());
             return withRefreshCookie(ResponseEntity.ok(), rotatedRefreshToken)
                     .body(loginResponse(employee, accessToken, resolveRoleKey(employee)));
@@ -236,8 +239,8 @@ public class AuthController {
                 employee.setPinFailedAttempts(0);
                 employeeRepository.save(employee);
             }
-            IssuedRefreshToken rotatedRefreshToken = refreshTokenService.rotate(rawRefreshToken, userAgent(servletRequest), ipAddress(servletRequest));
-            String accessToken = jwtService.generateToken(employee.getEmployeeId());
+            IssuedRefreshToken rotatedRefreshToken = refreshTokenService.rotateToFull(rawRefreshToken, userAgent(servletRequest), ipAddress(servletRequest));
+            String accessToken = jwtService.generateToken(employee.getEmployeeId(), rotatedRefreshToken.tokenHash());
             log.info("event=pin_login_success employeeId={}", employee.getEmployeeId());
             return withRefreshCookie(ResponseEntity.ok(), rotatedRefreshToken)
                     .body(loginResponse(employee, accessToken, resolveRoleKey(employee)));

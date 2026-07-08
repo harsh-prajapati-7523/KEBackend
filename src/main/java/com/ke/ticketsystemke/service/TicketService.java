@@ -66,6 +66,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class TicketService {
@@ -697,15 +698,68 @@ public class TicketService {
                         .map(Ticket::getId)
                         .toList()
         );
+        Map<String, String> employeeNamesById = resolveEmployeeNames(tickets);
         return tickets.stream()
-                .map(ticket -> toTicketResponse(ticket, totalsByTicketId.getOrDefault(ticket.getId(), BigDecimal.ZERO.setScale(2))))
+                .map(ticket -> toTicketResponse(
+                        ticket,
+                        totalsByTicketId.getOrDefault(ticket.getId(), BigDecimal.ZERO.setScale(2)),
+                        employeeNamesById
+                ))
                 .toList();
     }
 
+    private TicketResponse toTicketResponse(Ticket ticket, BigDecimal totalCharge, Map<String, String> employeeNamesById) {
+        return TicketResponse.from(
+                ticket,
+                totalCharge,
+                effectiveStatusResolver.resolve(ticket),
+                resolveEmployeeName(ticket.getPickedByEmployeeId(), employeeNamesById)
+        );
+    }
+
+    private Map<String, String> resolveEmployeeNames(List<Ticket> tickets) {
+        Set<String> normalizedEmployeeIds = tickets.stream()
+                .map(Ticket::getPickedByEmployeeId)
+                .map(this::trimToNull)
+                .filter(employeeId -> employeeId != null)
+                .map(employeeId -> employeeId.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        if (normalizedEmployeeIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, String> employeeNamesById = new HashMap<>();
+        Set<String> duplicateEmployeeIds = new LinkedHashSet<>();
+        for (Employee employee : employeeRepository.findByEmployeeIdLowercaseIn(normalizedEmployeeIds)) {
+            if (employee.getEmployeeId() == null) {
+                continue;
+            }
+            String normalizedEmployeeId = employee.getEmployeeId().toLowerCase(Locale.ROOT);
+            if (employeeNamesById.containsKey(normalizedEmployeeId)) {
+                duplicateEmployeeIds.add(normalizedEmployeeId);
+                continue;
+            }
+            employeeNamesById.put(normalizedEmployeeId, employee.getName());
+        }
+        duplicateEmployeeIds.forEach(employeeNamesById::remove);
+        return employeeNamesById;
+    }
+
     private String resolveEmployeeName(String employeeId) {
+        return resolveEmployeeName(employeeId, null);
+    }
+
+    private String resolveEmployeeName(String employeeId, Map<String, String> employeeNamesById) {
         String lookupEmployeeId = trimToNull(employeeId);
         if (lookupEmployeeId == null) {
             return null;
+        }
+        if (employeeNamesById != null) {
+            String resolvedName = employeeNamesById.get(lookupEmployeeId.toLowerCase(Locale.ROOT));
+            if (resolvedName != null) {
+                return resolvedName;
+            }
         }
         return employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
                 .map(Employee::getName)
