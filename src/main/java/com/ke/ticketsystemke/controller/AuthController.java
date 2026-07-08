@@ -256,9 +256,9 @@ public class AuthController {
             EmployeeRefreshToken refreshToken = refreshTokenService.validate(rawRefreshToken);
             Employee employee = refreshToken.getEmployee();
             boolean pinAvailable = employee.getPinHash() != null && !hasInactiveRole(employee);
-            return new PinLoginStatusResponse(pinAvailable);
+            return new PinLoginStatusResponse(pinAvailable, pinAvailable ? employee.getName() : null);
         } catch (Exception ex) {
-            return new PinLoginStatusResponse(false);
+            return new PinLoginStatusResponse(false, null);
         }
     }
 
