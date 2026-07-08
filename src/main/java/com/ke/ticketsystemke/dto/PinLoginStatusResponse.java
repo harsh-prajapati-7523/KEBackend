@@ -2,6 +2,7 @@ package com.ke.ticketsystemke.dto;
 
 public record PinLoginStatusResponse(
         boolean pinLoginAvailable,
-        String employeeName
+        String employeeName,
+        boolean sessionValid
 ) {
 }
