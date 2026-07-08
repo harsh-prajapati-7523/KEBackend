@@ -20,7 +20,7 @@ public interface DevicePairingRequestRepository extends JpaRepository<DevicePair
     @Query("select request from DevicePairingRequest request where request.requestId = :requestId")
     Optional<DevicePairingRequest> findWithLockByRequestId(@Param("requestId") String requestId);
 
-    List<DevicePairingRequest> findTop25ByStatusOrderByCreatedAtDesc(DevicePairingStatus status);
+    List<DevicePairingRequest> findTop25ByStatusAndExpiresAtAfterOrderByCreatedAtDesc(DevicePairingStatus status, Instant now);
 
     List<DevicePairingRequest> findAllByStatusAndExpiresAtBefore(DevicePairingStatus status, Instant now);
 }

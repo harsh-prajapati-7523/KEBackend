@@ -68,7 +68,8 @@ class DevicePairingControllerTest {
                 Instant.now(),
                 Instant.now().plusSeconds(60),
                 Instant.now(),
-                "EMP002"
+                "EMP002",
+                "Employee Two"
         );
         when(devicePairingService.approve(request, "EMP001")).thenReturn(response);
 

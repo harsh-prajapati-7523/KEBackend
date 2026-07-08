@@ -77,6 +77,11 @@ public class DevicePairingService {
         String nonce = randomToken();
         String signature = sign(requestId, nonce, expiresAt.toString());
         String deviceFingerprint = requireValue(request == null ? null : request.getDeviceFingerprint(), "Device fingerprint is required");
+        Employee technician = employeeRepository.findByEmployeeIdIgnoreCase(requireValue(request == null ? null : request.getEmployeeId(), "Employee is required"))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee not found"));
+        if (!technician.isActive() || effectiveAuthenticationMode(technician) != AuthenticationMode.DEVICE_PAIRING_PIN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee is not eligible for device pairing");
+        }
 
         DevicePairingRequest pairingRequest = new DevicePairingRequest();
         pairingRequest.setRequestId(requestId);
@@ -84,10 +89,11 @@ public class DevicePairingService {
         pairingRequest.setStatus(DevicePairingStatus.PENDING);
         pairingRequest.setDeviceFingerprint(limit(deviceFingerprint, 256));
         pairingRequest.setDeviceLabel(limit(request == null ? null : request.getDeviceLabel(), 120));
+        pairingRequest.setEmployee(technician);
         pairingRequest.setExpiresAt(expiresAt);
         pairingRequestRepository.save(pairingRequest);
-        log.info("event=device_pairing_requested requestId={} deviceLabel={} expiresAt={}",
-                requestId, pairingRequest.getDeviceLabel(), expiresAt);
+        log.info("event=device_pairing_requested requestId={} employeeId={} deviceLabel={} expiresAt={}",
+                requestId, technician.getEmployeeId(), pairingRequest.getDeviceLabel(), expiresAt);
 
         String pairingToken = "{\"requestId\":\"" + requestId
                 + "\",\"nonce\":\"" + nonce
@@ -106,7 +112,7 @@ public class DevicePairingService {
 
     @Transactional(readOnly = true)
     public List<DevicePairingRequestResponse> pendingRequests() {
-        return pairingRequestRepository.findTop25ByStatusOrderByCreatedAtDesc(DevicePairingStatus.PENDING)
+        return pairingRequestRepository.findTop25ByStatusAndExpiresAtAfterOrderByCreatedAtDesc(DevicePairingStatus.PENDING, Instant.now())
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -154,8 +160,12 @@ public class DevicePairingService {
             throw new ResponseStatusException(HttpStatus.GONE, "Pairing request is no longer active");
         }
 
-        Employee technician = employeeRepository.findByEmployeeIdIgnoreCase(requireValue(request.getEmployeeId(), "Employee is required"))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee not found"));
+        Employee technician = pairingRequest.getEmployee();
+        if (technician == null) {
+            technician = employeeRepository.findByEmployeeIdIgnoreCase(requireValue(request.getEmployeeId(), "Employee is required"))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee not found"));
+            pairingRequest.setEmployee(technician);
+        }
         if (!technician.isActive() || effectiveAuthenticationMode(technician) != AuthenticationMode.DEVICE_PAIRING_PIN) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee is not eligible for device pairing");
         }
@@ -163,7 +173,6 @@ public class DevicePairingService {
         Employee approver = employeeRepository.findByEmployeeIdIgnoreCase(approverEmployeeId == null ? "" : approverEmployeeId.trim())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid approver"));
 
-        pairingRequest.setEmployee(technician);
         pairingRequest.setApprovedByEmployee(approver);
         pairingRequest.setApprovedAt(now);
         pairingRequest.setStatus(DevicePairingStatus.APPROVED);
@@ -282,7 +291,8 @@ public class DevicePairingService {
                 request.getCreatedAt(),
                 request.getExpiresAt(),
                 request.getApprovedAt(),
-                employee == null ? null : employee.getEmployeeId()
+                employee == null ? null : employee.getEmployeeId(),
+                employee == null ? null : employee.getName()
         );
     }
 

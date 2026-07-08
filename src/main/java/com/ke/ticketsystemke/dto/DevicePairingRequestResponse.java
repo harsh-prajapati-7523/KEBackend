@@ -10,6 +10,7 @@ public record DevicePairingRequestResponse(
         Instant createdAt,
         Instant expiresAt,
         Instant approvedAt,
-        String employeeId
+        String employeeId,
+        String employeeName
 ) {
 }

@@ -1,8 +1,17 @@
 package com.ke.ticketsystemke.dto;
 
 public class DevicePairingStartRequest {
+    private String employeeId;
     private String deviceFingerprint;
     private String deviceLabel;
+
+    public String getEmployeeId() {
+        return employeeId;
+    }
+
+    public void setEmployeeId(String employeeId) {
+        this.employeeId = employeeId;
+    }
 
     public String getDeviceFingerprint() {
         return deviceFingerprint;
