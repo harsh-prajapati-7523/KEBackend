@@ -113,8 +113,7 @@ public class DevicePairingController {
         }
         accessService.requireAnyAllowed(
                 authentication.getName(),
-                AccessKey.MANAGE_EMPLOYEES,
-                AccessKey.MANAGE_ROLES
+                AccessKey.APPROVE_DEVICE_PAIRING
         );
     }
 
