@@ -21,6 +21,7 @@ import com.ke.ticketsystemke.service.EmployeeService;
 import com.ke.ticketsystemke.service.RefreshTokenService;
 import com.ke.ticketsystemke.service.RefreshTokenService.IssuedRefreshToken;
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -253,9 +254,10 @@ public class AuthController {
     @PostMapping("/pin/status")
     @Transactional(readOnly = true)
     public PinLoginStatusResponse pinLoginStatus(
-            @CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String rawRefreshToken
+            HttpServletRequest servletRequest
     ) {
         try {
+            String rawRefreshToken = refreshTokenCookieValue(servletRequest);
             EmployeeRefreshToken refreshToken = refreshTokenService.validate(rawRefreshToken);
             Employee employee = refreshToken.getEmployee();
             boolean pinAvailable = employee.getPinHash() != null && !hasInactiveRole(employee);
@@ -263,6 +265,18 @@ public class AuthController {
         } catch (Exception ex) {
             return new PinLoginStatusResponse(false, null, false);
         }
+    }
+
+    private String refreshTokenCookieValue(HttpServletRequest request) {
+        if (request == null || request.getCookies() == null) {
+            return null;
+        }
+        for (Cookie cookie : request.getCookies()) {
+            if (REFRESH_TOKEN_COOKIE.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 
     @PostMapping("/pin/reset")
