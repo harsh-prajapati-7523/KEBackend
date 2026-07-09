@@ -171,29 +171,10 @@ public class TicketChargeService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Charges cannot be added to ticket in its current status");
         }
 
-        if (status == TicketStatus.COMPLETED && !isAdminRole(role)) {
-            log.warn("event=charge_action_denied ticketId={} ticketNumber={} employeeId={} role={} status={}",
-                    ticket.getId(), ticket.getTicketNumber(), employeeId, role, status);
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not authorized to add charges to completed tickets");
-        }
-
-        if ((status == TicketStatus.PICKED || status == TicketStatus.IN_PROGRESS)
-                && !isAdminRole(role)
-                && !isTicketOwner(ticket, employeeId)) {
-            log.warn("event=charge_action_denied ticketId={} ticketNumber={} employeeId={} role={} status={}",
-                    ticket.getId(), ticket.getTicketNumber(), employeeId, role, status);
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not authorized to add charges to this ticket");
-        }
     }
 
     private void validateChargeDeleteAllowed(Ticket ticket, String role) {
         TicketStatus status = ticket.getStatus();
-
-        if (!isAdminRole(role)) {
-            log.warn("event=charge_action_denied ticketId={} ticketNumber={} role={} status={}",
-                    ticket.getId(), ticket.getTicketNumber(), role, status);
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not authorized to delete charge items");
-        }
 
         if (status == TicketStatus.NEW || status == TicketStatus.CANCELLED) {
             log.warn("event=charge_action_denied ticketId={} ticketNumber={} role={} status={}",
@@ -226,11 +207,4 @@ public class TicketChargeService {
         }
     }
 
-    private boolean isAdminRole(String role) {
-        return "SUPER_ADMIN".equals(role) || "ADMIN".equals(role);
-    }
-
-    private boolean isTicketOwner(Ticket ticket, String employeeId) {
-        return employeeId != null && employeeId.equals(ticket.getPickedByEmployeeId());
-    }
 }
