@@ -529,30 +529,17 @@ public class TicketService {
 
     @Transactional(readOnly = true)
     public List<TicketStatusFilterOptionResponse> getTicketStatusFilterOptions(String employeeId) {
-        List<TicketStatus> ticketStatuses = Arrays.asList(TicketStatus.values());
-        List<String> statusKeys = ticketStatuses.stream()
-                .map(Enum::name)
+        List<TicketStatusFilterOptionResponse> options = workflowStatusRepository
+                .findAllByActiveTrueOrderBySortOrderAscIdAsc()
+                .stream()
+                .map(workflowStatus -> new TicketStatusFilterOptionResponse(
+                        workflowStatus.getStatusKey(),
+                        workflowStatus.getDisplayName(),
+                        true,
+                        workflowStatus.getSortOrder(),
+                        workflowStatus.isTerminal()
+                ))
                 .toList();
-        Map<String, WorkflowStatus> statusesByKey = new HashMap<>();
-        for (WorkflowStatus workflowStatus : workflowStatusRepository.findAllByStatusKeyInAndSystemStatusTrueAndProtectedStatusTrue(statusKeys)) {
-            statusesByKey.put(workflowStatus.getStatusKey(), workflowStatus);
-        }
-
-        Map<String, Integer> enumOrderByKey = new HashMap<>();
-        List<TicketStatusFilterOptionResponse> options = new ArrayList<>();
-        for (TicketStatus status : ticketStatuses) {
-            enumOrderByKey.put(status.name(), status.ordinal());
-            WorkflowStatus workflowStatus = statusesByKey.get(status.name());
-            options.add(new TicketStatusFilterOptionResponse(
-                    status.name(),
-                    workflowStatus != null ? workflowStatus.getDisplayName() : formatTicketStatusLabel(status),
-                    workflowStatus == null || workflowStatus.isActive(),
-                    workflowStatus == null ? null : workflowStatus.getSortOrder(),
-                    workflowStatus != null ? workflowStatus.isTerminal() : isTerminalTicketStatus(status)
-            ));
-        }
-
-        options.sort((first, second) -> compareStatusFilterOptions(first, second, enumOrderByKey));
         log.info("event=ticket_status_filter_options_returned employeeId={} optionCount={}", employeeId, options.size());
         return options;
     }
@@ -659,7 +646,17 @@ public class TicketService {
             Integer size
     ) {
         String normalizedSearch = normalizeSearchQuery(search);
-        TicketStatus parsedStatus = parseEnum(TicketStatus.class, status, "status");
+        WorkflowStatus parsedStatusRecord = null;
+        TicketStatus parsedStatus = null;
+        if (status != null && !status.isBlank()) {
+            String normalizedStatus = status.trim().toUpperCase(Locale.ROOT);
+            parsedStatusRecord = workflowStatusRepository.findByStatusKey(normalizedStatus)
+                    .filter(WorkflowStatus::isActive)
+                    .orElse(null);
+            if (parsedStatusRecord == null) {
+                parsedStatus = parseEnum(TicketStatus.class, normalizedStatus, "status");
+            }
+        }
         TicketCategory parsedCategory = parseEnum(TicketCategory.class, category, "category");
         LocalDate parsedCreatedFrom = parseDate(createdFrom, "createdFrom");
         LocalDate parsedCreatedTo = parseDate(createdTo, "createdTo");
@@ -677,6 +674,7 @@ public class TicketService {
                         TicketSpecifications.queryTickets(
                                 normalizedSearch == null ? null : escapeLikeWildcards(normalizedSearch),
                                 parsedStatus,
+                                parsedStatusRecord,
                                 parsedCategory,
                                 createdFromInclusive,
                                 createdToExclusive,

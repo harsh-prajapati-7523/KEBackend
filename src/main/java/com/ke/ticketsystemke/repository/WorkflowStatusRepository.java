@@ -11,6 +11,8 @@ public interface WorkflowStatusRepository extends JpaRepository<WorkflowStatus, 
 
     List<WorkflowStatus> findAllByOrderBySortOrderAscIdAsc();
 
+    List<WorkflowStatus> findAllByActiveTrueOrderBySortOrderAscIdAsc();
+
     Optional<WorkflowStatus> findByStatusKey(String statusKey);
 
     List<WorkflowStatus> findAllByStatusKeyInAndSystemStatusTrueAndProtectedStatusTrue(Collection<String> statusKeys);

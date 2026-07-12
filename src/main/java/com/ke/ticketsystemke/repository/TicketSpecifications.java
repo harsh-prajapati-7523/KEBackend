@@ -3,6 +3,7 @@ package com.ke.ticketsystemke.repository;
 import com.ke.ticketsystemke.entity.Ticket;
 import com.ke.ticketsystemke.entity.TicketCategory;
 import com.ke.ticketsystemke.entity.TicketStatus;
+import com.ke.ticketsystemke.entity.WorkflowStatus;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -20,6 +21,7 @@ public final class TicketSpecifications {
     public static Specification<Ticket> queryTickets(
             String search,
             TicketStatus status,
+            WorkflowStatus statusRecord,
             TicketCategory category,
             Instant createdFrom,
             Instant createdToExclusive,
@@ -28,7 +30,9 @@ public final class TicketSpecifications {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (status != null) {
+            if (statusRecord != null) {
+                predicates.add(criteriaBuilder.equal(root.get("statusRecord"), statusRecord));
+            } else if (status != null) {
                 predicates.add(criteriaBuilder.equal(root.get("status"), status));
             }
             if (category != null) {
