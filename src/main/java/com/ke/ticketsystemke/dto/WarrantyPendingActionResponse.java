@@ -1,3 +1,4 @@
 package com.ke.ticketsystemke.dto;
 import java.util.List;
-public record WarrantyPendingActionResponse(String code,String label,int priority,boolean blocking,List<String> reasons) {}
+import java.time.LocalDate;
+public record WarrantyPendingActionResponse(String code,String label,int priority,boolean blocking,LocalDate dueDate,boolean overdue,long daysOverdue,List<String> reasons,String recommendedActionFormKey) {}

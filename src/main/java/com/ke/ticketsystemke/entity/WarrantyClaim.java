@@ -21,12 +21,25 @@ public class WarrantyClaim {
     @Column(length = 120) private String modelNumber;
     @Column(length = 120) private String manufacturerComplaintNumber;
     private LocalDate complaintRegisteredDate;
+    private LocalDate complaintRegistrationAttemptDate;
+    @Enumerated(EnumType.STRING) @Column(length = 40) private WarrantyContactMethod complaintContactMethod;
+    @Column(length = 1000) private String complaintAttemptNotes;
     private LocalDate expectedVisitDate;
+    private LocalDate actualVisitDate;
+    @Enumerated(EnumType.STRING) @Column(length = 50) private WarrantyVisitOutcome visitOutcome;
+    @Column(length = 1500) private String visitNotes;
     @Column(length = 120) private String manufacturerEngineerName;
     @Column(length = 20) private String manufacturerEngineerMobile;
     @Column(length = 160) private String manufacturerServiceCenterName;
     @Column(length = 2000) private String warrantyNotes;
     private LocalDate nextFollowUpDate;
+    @Column(length = 1000) private String followUpNotes;
+    @Enumerated(EnumType.STRING) @Column(length = 40) private WarrantyFollowUpSource followUpSource;
+    private Instant lastFollowUpScheduledAt;
+    @Column(length = 80) private String lastFollowUpUpdatedByEmployeeId;
+    private Instant complaintRegisteredAt;
+    private Instant visitScheduledAt;
+    private Instant visitRecordedAt;
     @Column(length = 80) private String warrantyOwnerEmployeeId;
     @Column(nullable = false, updatable = false) private Instant markedWarrantyAt;
     private Instant resolvedAt;
@@ -51,12 +64,16 @@ public class WarrantyClaim {
     public String getModelNumber(){return modelNumber;} public void setModelNumber(String v){modelNumber=v;}
     public String getManufacturerComplaintNumber(){return manufacturerComplaintNumber;} public void setManufacturerComplaintNumber(String v){manufacturerComplaintNumber=v;}
     public LocalDate getComplaintRegisteredDate(){return complaintRegisteredDate;} public void setComplaintRegisteredDate(LocalDate v){complaintRegisteredDate=v;}
+    public LocalDate getComplaintRegistrationAttemptDate(){return complaintRegistrationAttemptDate;} public void setComplaintRegistrationAttemptDate(LocalDate v){complaintRegistrationAttemptDate=v;} public WarrantyContactMethod getComplaintContactMethod(){return complaintContactMethod;} public void setComplaintContactMethod(WarrantyContactMethod v){complaintContactMethod=v;} public String getComplaintAttemptNotes(){return complaintAttemptNotes;} public void setComplaintAttemptNotes(String v){complaintAttemptNotes=v;}
     public LocalDate getExpectedVisitDate(){return expectedVisitDate;} public void setExpectedVisitDate(LocalDate v){expectedVisitDate=v;}
+    public LocalDate getActualVisitDate(){return actualVisitDate;} public void setActualVisitDate(LocalDate v){actualVisitDate=v;} public WarrantyVisitOutcome getVisitOutcome(){return visitOutcome;} public void setVisitOutcome(WarrantyVisitOutcome v){visitOutcome=v;} public String getVisitNotes(){return visitNotes;} public void setVisitNotes(String v){visitNotes=v;}
     public String getManufacturerEngineerName(){return manufacturerEngineerName;} public void setManufacturerEngineerName(String v){manufacturerEngineerName=v;}
     public String getManufacturerEngineerMobile(){return manufacturerEngineerMobile;} public void setManufacturerEngineerMobile(String v){manufacturerEngineerMobile=v;}
     public String getManufacturerServiceCenterName(){return manufacturerServiceCenterName;} public void setManufacturerServiceCenterName(String v){manufacturerServiceCenterName=v;}
     public String getWarrantyNotes(){return warrantyNotes;} public void setWarrantyNotes(String v){warrantyNotes=v;}
     public LocalDate getNextFollowUpDate(){return nextFollowUpDate;} public void setNextFollowUpDate(LocalDate v){nextFollowUpDate=v;}
+    public String getFollowUpNotes(){return followUpNotes;} public void setFollowUpNotes(String v){followUpNotes=v;} public WarrantyFollowUpSource getFollowUpSource(){return followUpSource;} public void setFollowUpSource(WarrantyFollowUpSource v){followUpSource=v;} public Instant getLastFollowUpScheduledAt(){return lastFollowUpScheduledAt;} public void setLastFollowUpScheduledAt(Instant v){lastFollowUpScheduledAt=v;} public String getLastFollowUpUpdatedByEmployeeId(){return lastFollowUpUpdatedByEmployeeId;} public void setLastFollowUpUpdatedByEmployeeId(String v){lastFollowUpUpdatedByEmployeeId=v;}
+    public Instant getComplaintRegisteredAt(){return complaintRegisteredAt;} public void setComplaintRegisteredAt(Instant v){complaintRegisteredAt=v;} public Instant getVisitScheduledAt(){return visitScheduledAt;} public void setVisitScheduledAt(Instant v){visitScheduledAt=v;} public Instant getVisitRecordedAt(){return visitRecordedAt;} public void setVisitRecordedAt(Instant v){visitRecordedAt=v;}
     public String getWarrantyOwnerEmployeeId(){return warrantyOwnerEmployeeId;} public void setWarrantyOwnerEmployeeId(String v){warrantyOwnerEmployeeId=v;}
     public Instant getMarkedWarrantyAt(){return markedWarrantyAt;} public Instant getResolvedAt(){return resolvedAt;} public void setResolvedAt(Instant v){resolvedAt=v;}
     public Instant getCreatedAt(){return createdAt;} public Instant getUpdatedAt(){return updatedAt;}
