@@ -47,6 +47,10 @@ public class AccessBootstrapInitializer implements ApplicationRunner {
             AccessKey.MANAGE_WARRANTY,
             AccessKey.RESOLVE_WARRANTY,
             AccessKey.MANAGE_WARRANTY_DOCUMENTS,
+            AccessKey.VIEW_WARRANTY_TRACKER,
+            AccessKey.VIEW_WARRANTY_REPORTS,
+            AccessKey.VIEW_WARRANTY_REMINDERS,
+            AccessKey.MANAGE_WARRANTY_REMINDERS,
             AccessKey.VIEW_CUSTOMER_HISTORY,
             AccessKey.VIEW_CHARGES,
             AccessKey.ADD_CHARGE,
@@ -169,6 +173,10 @@ public class AccessBootstrapInitializer implements ApplicationRunner {
         metadata.put(AccessKey.MANAGE_WARRANTY, new AccessMetadataSeed("Manage Warranty", "Create and update warranty claims.", "Warranty", 92));
         metadata.put(AccessKey.RESOLVE_WARRANTY, new AccessMetadataSeed("Resolve Warranty", "Record warranty outcomes and approved warranty workflow decisions.", "Warranty", 93));
         metadata.put(AccessKey.MANAGE_WARRANTY_DOCUMENTS, new AccessMetadataSeed("Manage Warranty Documents", "Upload, supersede, and remove private warranty evidence.", "Warranty", 94));
+        metadata.put(AccessKey.VIEW_WARRANTY_TRACKER, new AccessMetadataSeed("View Warranty Tracker", "View the organization-wide warranty work tracker.", "Warranty", 95));
+        metadata.put(AccessKey.VIEW_WARRANTY_REPORTS, new AccessMetadataSeed("View Warranty Reports", "View read-only warranty business reports and operational metrics.", "Warranty", 96));
+        metadata.put(AccessKey.VIEW_WARRANTY_REMINDERS, new AccessMetadataSeed("View Warranty Reminders", "View assigned internal warranty reminders and daily workload summary.", "Warranty", 97));
+        metadata.put(AccessKey.MANAGE_WARRANTY_REMINDERS, new AccessMetadataSeed("Manage Warranty Reminders", "View organization queues and acknowledge or snooze warranty reminders.", "Warranty", 98));
         metadata.put(AccessKey.VIEW_CUSTOMER_HISTORY, new AccessMetadataSeed("View Customer History", "View customer ticket history.", "Tickets", 100));
         metadata.put(AccessKey.VIEW_CHARGES, new AccessMetadataSeed("View Charges", "View ticket charges.", "Ticket Charges", 110));
         metadata.put(AccessKey.ADD_CHARGE, new AccessMetadataSeed("Add Charge", "Add charges to eligible tickets.", "Ticket Charges", 120));

@@ -1,0 +1,1 @@
+package com.ke.ticketsystemke.dto;import java.time.LocalDate;public record WarrantyReminderGenerationResponse(Long runId,LocalDate businessDate,int claimsScanned,int remindersCreated,int remindersUpdated,int remindersResolved,int failures){}

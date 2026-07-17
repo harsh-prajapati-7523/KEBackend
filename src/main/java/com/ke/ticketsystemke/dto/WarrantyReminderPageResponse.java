@@ -1,0 +1,1 @@
+package com.ke.ticketsystemke.dto;import java.util.List;public record WarrantyReminderPageResponse(List<WarrantyReminderResponse> content,int page,int size,long totalElements,int totalPages,boolean managerView){}

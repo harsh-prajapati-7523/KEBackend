@@ -1,0 +1,1 @@
+package com.ke.ticketsystemke.dto;import java.util.*;public record WarrantyTrackerFilterOptionsResponse(List<String> manufacturers,List<Option> owners,List<String> ticketCategories,List<String> ticketStatuses,List<String> warrantyStates,List<String> warrantyResults,List<String> pendingActions){public record Option(String value,String label){}}

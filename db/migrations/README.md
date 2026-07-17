@@ -41,3 +41,27 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/V20260717_05__warranty_
 ```
 
 Configure a private `WARRANTY_FILE_STORAGE_ROOT` before enabling uploads. Database backup alone is no longer complete; back up the database and warranty file root as one recovery set. Do not apply Phase 3 to production without separate authorization.
+
+Phase 4 test migration (after Phase 3):
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/V20260717_06__warranty_phase_4_tracker.sql
+```
+
+Use `EXPLAIN (ANALYZE, BUFFERS)` after representative tracker data is loaded. Do not apply Phase 4 to production without separate authorization.
+
+Phase 5 test migration (after Phase 4):
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/V20260717_07__warranty_phase_5_reports.sql
+```
+
+Run representative report `EXPLAIN (ANALYZE, BUFFERS)` checks after loading test data. Do not apply Phase 5 to production without separate authorization.
+
+Phase 6 test migration (after Phase 5):
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/V20260717_08__warranty_phase_6_reminders.sql
+```
+
+Configure the reminder enablement, cron, timezone, snooze, escalation, and long-pending settings before test startup. Run generation twice and verify the unique deduplication constraint. Do not apply Phase 6 to production without separate authorization.

@@ -3,6 +3,8 @@ import com.ke.ticketsystemke.entity.WarrantyClaim;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.EntityGraph;
+import java.util.List;
 public interface WarrantyClaimRepository extends JpaRepository<WarrantyClaim,Long>{
     Optional<WarrantyClaim> findByTicket_IdAndActiveTrue(Long ticketId);
     boolean existsByTicket_IdAndActiveTrue(Long ticketId);
@@ -11,4 +13,5 @@ public interface WarrantyClaimRepository extends JpaRepository<WarrantyClaim,Lon
     int findMaxClaimSequence(Long ticketId);
     boolean existsByTicket_CategoryRecord_IdAndActiveTrue(Long categoryId);
     Optional<WarrantyClaim> findFirstByTicket_IdOrderByClaimSequenceDesc(Long ticketId);
+    @EntityGraph(attributePaths={"ticket","ticket.statusRecord","ticket.categoryRecord"}) @Query("select c from WarrantyClaim c") List<WarrantyClaim> findAllForTracker();
 }

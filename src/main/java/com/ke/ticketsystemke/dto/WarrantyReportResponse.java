@@ -1,0 +1,1 @@
+package com.ke.ticketsystemke.dto;import java.time.*;import java.util.Map;public record WarrantyReportResponse(LocalDate from,LocalDate to,String timezone,OffsetDateTime generatedAt,Map<String,Object> data){}

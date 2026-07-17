@@ -6,4 +6,6 @@ public interface WarrantyReplacementRepository extends JpaRepository<WarrantyRep
  boolean existsByWarrantyClaim_IdAndActiveTrue(Long claimId);
  @Query("select coalesce(max(r.replacementSequence),0) from WarrantyReplacement r where r.warrantyClaim.id=:claimId") int findMaxSequence(@Param("claimId") Long claimId);
  List<WarrantyReplacement> findByNormalizedNewSerialNumber(String normalizedSerial);
+ List<WarrantyReplacement> findByWarrantyClaim_IdInAndActiveTrue(Collection<Long> claimIds);
+ List<WarrantyReplacement> findByWarrantyClaim_IdIn(Collection<Long> claimIds);
 }

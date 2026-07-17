@@ -1,0 +1,1 @@
+package com.ke.ticketsystemke.dto;import jakarta.validation.constraints.*;import java.time.Instant;public record WarrantyReminderSnoozeRequest(@NotNull Long version,@NotNull Instant snoozedUntil,@NotBlank @Size(max=1000)String reason){}
