@@ -1,0 +1,6 @@
+package com.ke.ticketsystemke.entity;
+
+public enum WarrantyClaimEventType {
+    WARRANTY_CLAIM_CREATED, WARRANTY_DETAILS_UPDATED, WARRANTY_OWNER_CHANGED,
+    WARRANTY_STATE_CHANGED, WARRANTY_CLAIM_CLOSED
+}

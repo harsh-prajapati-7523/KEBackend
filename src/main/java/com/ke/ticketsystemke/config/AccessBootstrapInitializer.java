@@ -43,6 +43,8 @@ public class AccessBootstrapInitializer implements ApplicationRunner {
             AccessKey.COMPLETE_TICKET,
             AccessKey.CANCEL_TICKET,
             AccessKey.UPDATE_WARRANTY,
+            AccessKey.VIEW_WARRANTY,
+            AccessKey.MANAGE_WARRANTY,
             AccessKey.VIEW_CUSTOMER_HISTORY,
             AccessKey.VIEW_CHARGES,
             AccessKey.ADD_CHARGE,
@@ -58,6 +60,7 @@ public class AccessBootstrapInitializer implements ApplicationRunner {
             AccessKey.START_WORK,
             AccessKey.COMPLETE_TICKET,
             AccessKey.UPDATE_WARRANTY,
+            AccessKey.VIEW_WARRANTY,
             AccessKey.VIEW_CUSTOMER_HISTORY,
             AccessKey.VIEW_CHARGES,
             AccessKey.ADD_CHARGE,
@@ -160,6 +163,8 @@ public class AccessBootstrapInitializer implements ApplicationRunner {
         metadata.put(AccessKey.COMPLETE_TICKET, new AccessMetadataSeed("Complete Ticket", "Complete an eligible in-progress ticket.", "Ticket Actions", 70));
         metadata.put(AccessKey.CANCEL_TICKET, new AccessMetadataSeed("Cancel Ticket", "Cancel an eligible ticket.", "Ticket Actions", 80));
         metadata.put(AccessKey.UPDATE_WARRANTY, new AccessMetadataSeed("Update Warranty", "Update ticket warranty and manufacturer details.", "Ticket Actions", 90));
+        metadata.put(AccessKey.VIEW_WARRANTY, new AccessMetadataSeed("View Warranty", "View warranty claims and warranty activity.", "Warranty", 91));
+        metadata.put(AccessKey.MANAGE_WARRANTY, new AccessMetadataSeed("Manage Warranty", "Create and update warranty claims.", "Warranty", 92));
         metadata.put(AccessKey.VIEW_CUSTOMER_HISTORY, new AccessMetadataSeed("View Customer History", "View customer ticket history.", "Tickets", 100));
         metadata.put(AccessKey.VIEW_CHARGES, new AccessMetadataSeed("View Charges", "View ticket charges.", "Ticket Charges", 110));
         metadata.put(AccessKey.ADD_CHARGE, new AccessMetadataSeed("Add Charge", "Add charges to eligible tickets.", "Ticket Charges", 120));

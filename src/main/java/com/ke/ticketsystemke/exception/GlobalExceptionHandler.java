@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.stream.Collectors;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -64,6 +65,14 @@ public class GlobalExceptionHandler {
         log.warn("event=access_denied message={} correlationId={}", ex.getMessage(), cid);
         ErrorResponse body = new ErrorResponse("Access denied", cid);
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
+        String cid = MDC.get("correlationId");
+        log.warn("event=optimistic_lock_conflict correlationId={}", cid);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("The record was updated by another user", cid));
     }
 
     @ExceptionHandler(Exception.class)
