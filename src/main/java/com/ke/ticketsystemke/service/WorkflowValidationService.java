@@ -23,6 +23,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.ke.ticketsystemke.repository.WarrantyClaimRepository;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -43,7 +45,9 @@ public class WorkflowValidationService {
     private final RoleRepository roleRepository;
     private final RoleAccessRuleRepository roleAccessRuleRepository;
     private final AccessKeyMetadataRepository accessKeyMetadataRepository;
+    private final WarrantyClaimRepository warrantyClaimRepository;
 
+    @Autowired
     public WorkflowValidationService(
             TicketCategoryRepository ticketCategoryRepository,
             WorkflowTransitionRepository workflowTransitionRepository,
@@ -52,7 +56,8 @@ public class WorkflowValidationService {
             WorkflowTransitionRoleRuleRepository workflowTransitionRoleRuleRepository,
             RoleRepository roleRepository,
             RoleAccessRuleRepository roleAccessRuleRepository,
-            AccessKeyMetadataRepository accessKeyMetadataRepository
+            AccessKeyMetadataRepository accessKeyMetadataRepository,
+            WarrantyClaimRepository warrantyClaimRepository
     ) {
         this.ticketCategoryRepository = ticketCategoryRepository;
         this.workflowTransitionRepository = workflowTransitionRepository;
@@ -62,7 +67,10 @@ public class WorkflowValidationService {
         this.roleRepository = roleRepository;
         this.roleAccessRuleRepository = roleAccessRuleRepository;
         this.accessKeyMetadataRepository = accessKeyMetadataRepository;
+        this.warrantyClaimRepository = warrantyClaimRepository;
     }
+
+    public WorkflowValidationService(TicketCategoryRepository ticketCategoryRepository,WorkflowTransitionRepository workflowTransitionRepository,WorkflowActionRepository workflowActionRepository,WorkflowTransitionCategoryRuleRepository workflowTransitionCategoryRuleRepository,WorkflowTransitionRoleRuleRepository workflowTransitionRoleRuleRepository,RoleRepository roleRepository,RoleAccessRuleRepository roleAccessRuleRepository,AccessKeyMetadataRepository accessKeyMetadataRepository){this(ticketCategoryRepository,workflowTransitionRepository,workflowActionRepository,workflowTransitionCategoryRuleRepository,workflowTransitionRoleRuleRepository,roleRepository,roleAccessRuleRepository,accessKeyMetadataRepository,null);}
 
     @Transactional(readOnly = true)
     public WorkflowValidationResponse validateCategoryWorkflow(Long categoryId) {
@@ -145,6 +153,7 @@ public class WorkflowValidationService {
         }
 
         validateReachability(executableCategoryTransitions, blockingIssues);
+        validateWarrantyTransitionMappings(category, warnings);
 
         return new WorkflowValidationResponse(
                 category.getId(),
@@ -155,6 +164,19 @@ public class WorkflowValidationService {
                 blockingIssues,
                 warnings
         );
+    }
+
+    private void validateWarrantyTransitionMappings(TicketCategoryConfig category,List<WorkflowValidationIssueResponse> warnings) {
+        if (category.getWorkflowMode()!=WorkflowMode.DB_CONFIGURED) return;
+        List<String> keys=List.of(WarrantyResolutionService.MOVE_READY,WarrantyResolutionService.CONTINUE_PAID);
+        boolean warrantyConfigured=keys.stream().anyMatch(key->workflowActionRepository.findByActionKey(key).isPresent());
+        boolean activeWarrantyJourney=warrantyClaimRepository!=null&&warrantyClaimRepository.existsByTicket_CategoryRecord_IdAndActiveTrue(category.getId());
+        if(!warrantyConfigured&&!activeWarrantyJourney)return;
+        for(String key:keys){
+            if(workflowActionRepository.findByActionKey(key).isEmpty()){addIssue(warnings,"MISSING_WARRANTY_ACTION_METADATA","Warranty workflow action metadata is missing for "+key,null);continue;}
+            long matches=workflowTransitionRepository.findAll().stream().filter(WorkflowTransition::isActive).filter(t->key.equals(t.getActionKey())).filter(t->isCategoryAllowed(t,category.getId())).count();
+            if(matches==0)addIssue(warnings,"MISSING_WARRANTY_TRANSITION_MAPPING","No active warranty transition mapping exists for "+key,null);
+        }
     }
 
     @Transactional(readOnly = true)

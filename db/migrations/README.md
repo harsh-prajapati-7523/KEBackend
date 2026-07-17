@@ -17,3 +17,19 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/V20260717_02__warranty_
 ```
 
 Phase 2B is authorized for controlled test deployment only. Production application is not authorized by this task.
+
+Phase 2C test migration (after tester approval only):
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/V20260717_03__warranty_phase_2c_resolution.sql
+```
+
+Do not apply Phase 2C to production without a separate production-delivery authorization.
+
+Phase 2D test migration (after Phase 2C and tester approval only):
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/V20260717_04__warranty_phase_2d_replacement.sql
+```
+
+Do not apply Phase 2D to production without separate authorization.

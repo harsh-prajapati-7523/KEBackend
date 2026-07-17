@@ -9,4 +9,6 @@ public interface WarrantyClaimRepository extends JpaRepository<WarrantyClaim,Lon
     long countByTicket_Id(Long ticketId);
     @Query("select coalesce(max(c.claimSequence),0) from WarrantyClaim c where c.ticket.id=:ticketId")
     int findMaxClaimSequence(Long ticketId);
+    boolean existsByTicket_CategoryRecord_IdAndActiveTrue(Long categoryId);
+    Optional<WarrantyClaim> findFirstByTicket_IdOrderByClaimSequenceDesc(Long ticketId);
 }

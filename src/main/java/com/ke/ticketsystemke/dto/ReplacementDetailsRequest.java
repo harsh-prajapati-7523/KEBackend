@@ -1,0 +1,3 @@
+package com.ke.ticketsystemke.dto;
+import jakarta.validation.constraints.*; import java.time.LocalDate;
+public record ReplacementDetailsRequest(@NotNull LocalDate replacementReceivedDate,@Size(max=160) String newProductName,@Size(max=120) String newProductType,@Size(max=120) String newModelNumber,@Size(max=160) String newSerialNumber,LocalDate newWarrantyStartDate,LocalDate newWarrantyEndDate,@Size(max=160) String replacementReferenceNumber,@NotBlank @Size(max=160) String replacementProvidedBy,@Size(max=2000) String replacementNotes,@Size(max=1000) String serialNumberOverrideReason,@Size(max=1000) String referenceOverrideReason,@NotNull Long claimVersion,Long replacementVersion){}

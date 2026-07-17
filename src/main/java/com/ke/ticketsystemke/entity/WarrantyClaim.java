@@ -40,6 +40,28 @@ public class WarrantyClaim {
     private Instant complaintRegisteredAt;
     private Instant visitScheduledAt;
     private Instant visitRecordedAt;
+    private Instant manufacturerRepairCompletedAt;
+    private LocalDate manufacturerRepairCompletionDate;
+    @Column(length = 1500) private String manufacturerRepairCompletionNotes;
+    @Column(length = 120) private String manufacturerRepairReference;
+    private Instant warrantyRejectedAt;
+    private LocalDate warrantyRejectionDate;
+    @Column(length = 1500) private String warrantyRejectionReason;
+    @Enumerated(EnumType.STRING) @Column(length = 40) private WarrantyRejectionDecision rejectionDecision;
+    private Instant customerDecisionAt;
+    private LocalDate customerDecisionDate;
+    @Column(length = 1500) private String customerDecisionNotes;
+    private Instant customerDidNotProceedAt;
+    private LocalDate customerDidNotProceedDate;
+    @Column(length = 1500) private String customerDidNotProceedReason;
+    @Enumerated(EnumType.STRING) @Column(length = 40) private WarrantyCustomerJourneyDecision customerJourneyDecision;
+    private Instant replacementApprovedAt;
+    private LocalDate replacementApprovalDate;
+    @Column(length = 120) private String replacementApprovalReference;
+    private LocalDate expectedReplacementDate;
+    @Column(length = 1500) private String replacementApprovalNotes;
+    private Instant claimClosedAt;
+    @Column(length = 80) private String claimClosedByEmployeeId;
     @Column(length = 80) private String warrantyOwnerEmployeeId;
     @Column(nullable = false, updatable = false) private Instant markedWarrantyAt;
     private Instant resolvedAt;
@@ -74,6 +96,12 @@ public class WarrantyClaim {
     public LocalDate getNextFollowUpDate(){return nextFollowUpDate;} public void setNextFollowUpDate(LocalDate v){nextFollowUpDate=v;}
     public String getFollowUpNotes(){return followUpNotes;} public void setFollowUpNotes(String v){followUpNotes=v;} public WarrantyFollowUpSource getFollowUpSource(){return followUpSource;} public void setFollowUpSource(WarrantyFollowUpSource v){followUpSource=v;} public Instant getLastFollowUpScheduledAt(){return lastFollowUpScheduledAt;} public void setLastFollowUpScheduledAt(Instant v){lastFollowUpScheduledAt=v;} public String getLastFollowUpUpdatedByEmployeeId(){return lastFollowUpUpdatedByEmployeeId;} public void setLastFollowUpUpdatedByEmployeeId(String v){lastFollowUpUpdatedByEmployeeId=v;}
     public Instant getComplaintRegisteredAt(){return complaintRegisteredAt;} public void setComplaintRegisteredAt(Instant v){complaintRegisteredAt=v;} public Instant getVisitScheduledAt(){return visitScheduledAt;} public void setVisitScheduledAt(Instant v){visitScheduledAt=v;} public Instant getVisitRecordedAt(){return visitRecordedAt;} public void setVisitRecordedAt(Instant v){visitRecordedAt=v;}
+    public Instant getManufacturerRepairCompletedAt(){return manufacturerRepairCompletedAt;} public void setManufacturerRepairCompletedAt(Instant v){manufacturerRepairCompletedAt=v;} public LocalDate getManufacturerRepairCompletionDate(){return manufacturerRepairCompletionDate;} public void setManufacturerRepairCompletionDate(LocalDate v){manufacturerRepairCompletionDate=v;} public String getManufacturerRepairCompletionNotes(){return manufacturerRepairCompletionNotes;} public void setManufacturerRepairCompletionNotes(String v){manufacturerRepairCompletionNotes=v;} public String getManufacturerRepairReference(){return manufacturerRepairReference;} public void setManufacturerRepairReference(String v){manufacturerRepairReference=v;}
+    public Instant getWarrantyRejectedAt(){return warrantyRejectedAt;} public void setWarrantyRejectedAt(Instant v){warrantyRejectedAt=v;} public LocalDate getWarrantyRejectionDate(){return warrantyRejectionDate;} public void setWarrantyRejectionDate(LocalDate v){warrantyRejectionDate=v;} public String getWarrantyRejectionReason(){return warrantyRejectionReason;} public void setWarrantyRejectionReason(String v){warrantyRejectionReason=v;} public WarrantyRejectionDecision getRejectionDecision(){return rejectionDecision;} public void setRejectionDecision(WarrantyRejectionDecision v){rejectionDecision=v;}
+    public Instant getCustomerDecisionAt(){return customerDecisionAt;} public void setCustomerDecisionAt(Instant v){customerDecisionAt=v;} public LocalDate getCustomerDecisionDate(){return customerDecisionDate;} public void setCustomerDecisionDate(LocalDate v){customerDecisionDate=v;} public String getCustomerDecisionNotes(){return customerDecisionNotes;} public void setCustomerDecisionNotes(String v){customerDecisionNotes=v;}
+    public Instant getCustomerDidNotProceedAt(){return customerDidNotProceedAt;} public void setCustomerDidNotProceedAt(Instant v){customerDidNotProceedAt=v;} public LocalDate getCustomerDidNotProceedDate(){return customerDidNotProceedDate;} public void setCustomerDidNotProceedDate(LocalDate v){customerDidNotProceedDate=v;} public String getCustomerDidNotProceedReason(){return customerDidNotProceedReason;} public void setCustomerDidNotProceedReason(String v){customerDidNotProceedReason=v;} public WarrantyCustomerJourneyDecision getCustomerJourneyDecision(){return customerJourneyDecision;} public void setCustomerJourneyDecision(WarrantyCustomerJourneyDecision v){customerJourneyDecision=v;}
+    public Instant getReplacementApprovedAt(){return replacementApprovedAt;} public void setReplacementApprovedAt(Instant v){replacementApprovedAt=v;} public LocalDate getReplacementApprovalDate(){return replacementApprovalDate;} public void setReplacementApprovalDate(LocalDate v){replacementApprovalDate=v;} public String getReplacementApprovalReference(){return replacementApprovalReference;} public void setReplacementApprovalReference(String v){replacementApprovalReference=v;} public LocalDate getExpectedReplacementDate(){return expectedReplacementDate;} public void setExpectedReplacementDate(LocalDate v){expectedReplacementDate=v;} public String getReplacementApprovalNotes(){return replacementApprovalNotes;} public void setReplacementApprovalNotes(String v){replacementApprovalNotes=v;}
+    public Instant getClaimClosedAt(){return claimClosedAt;} public void setClaimClosedAt(Instant v){claimClosedAt=v;} public String getClaimClosedByEmployeeId(){return claimClosedByEmployeeId;} public void setClaimClosedByEmployeeId(String v){claimClosedByEmployeeId=v;}
     public String getWarrantyOwnerEmployeeId(){return warrantyOwnerEmployeeId;} public void setWarrantyOwnerEmployeeId(String v){warrantyOwnerEmployeeId=v;}
     public Instant getMarkedWarrantyAt(){return markedWarrantyAt;} public Instant getResolvedAt(){return resolvedAt;} public void setResolvedAt(Instant v){resolvedAt=v;}
     public Instant getCreatedAt(){return createdAt;} public Instant getUpdatedAt(){return updatedAt;}

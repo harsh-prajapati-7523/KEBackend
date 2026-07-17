@@ -22,6 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class GenericTransitionExecutorService {
@@ -41,7 +42,9 @@ public class GenericTransitionExecutorService {
     private final WorkflowTransitionRoleScopeValidator workflowTransitionRoleScopeValidator;
     private final WorkflowTransitionCategoryScopeValidator workflowTransitionCategoryScopeValidator;
     private final RepairWorkflowFeatureFlag repairWorkflowFeatureFlag;
+    private final WorkflowTransitionExecutionService workflowTransitionExecutionService;
 
+    @Autowired
     public GenericTransitionExecutorService(
             TicketRepository ticketRepository,
             TicketCategoryRepository ticketCategoryRepository,
@@ -55,7 +58,8 @@ public class GenericTransitionExecutorService {
             TicketWorkflowHistoryService ticketWorkflowHistoryService,
             WorkflowTransitionRoleScopeValidator workflowTransitionRoleScopeValidator,
             WorkflowTransitionCategoryScopeValidator workflowTransitionCategoryScopeValidator,
-            RepairWorkflowFeatureFlag repairWorkflowFeatureFlag
+            RepairWorkflowFeatureFlag repairWorkflowFeatureFlag,
+            WorkflowTransitionExecutionService workflowTransitionExecutionService
     ) {
         this.ticketRepository = ticketRepository;
         this.ticketCategoryRepository = ticketCategoryRepository;
@@ -70,7 +74,10 @@ public class GenericTransitionExecutorService {
         this.workflowTransitionRoleScopeValidator = workflowTransitionRoleScopeValidator;
         this.workflowTransitionCategoryScopeValidator = workflowTransitionCategoryScopeValidator;
         this.repairWorkflowFeatureFlag = repairWorkflowFeatureFlag;
+        this.workflowTransitionExecutionService = workflowTransitionExecutionService;
     }
+
+    public GenericTransitionExecutorService(TicketRepository ticketRepository,TicketCategoryRepository ticketCategoryRepository,WorkflowTransitionRepository workflowTransitionRepository,WorkflowActionRepository workflowActionRepository,WorkflowStatusRepository workflowStatusRepository,EffectiveStatusResolver effectiveStatusResolver,AccessService accessService,EmployeeRepository employeeRepository,TicketChargeService ticketChargeService,TicketWorkflowHistoryService ticketWorkflowHistoryService,WorkflowTransitionRoleScopeValidator workflowTransitionRoleScopeValidator,WorkflowTransitionCategoryScopeValidator workflowTransitionCategoryScopeValidator,RepairWorkflowFeatureFlag repairWorkflowFeatureFlag){this(ticketRepository,ticketCategoryRepository,workflowTransitionRepository,workflowActionRepository,workflowStatusRepository,effectiveStatusResolver,accessService,employeeRepository,ticketChargeService,ticketWorkflowHistoryService,workflowTransitionRoleScopeValidator,workflowTransitionCategoryScopeValidator,repairWorkflowFeatureFlag,new WorkflowTransitionExecutionService(ticketRepository,ticketWorkflowHistoryService,ticketChargeService,effectiveStatusResolver,employeeRepository));}
 
     @Transactional(readOnly = true)
     public GenericTransitionPreviewResponse previewTransition(
@@ -116,7 +123,7 @@ public class GenericTransitionExecutorService {
             GenericTransitionExecutionRequest request
     ) {
         GenericTransitionExecutionPlan plan = prepareExecution(ticketId, workflowTransitionId, employeeId);
-        return executePreparedTransition(plan, employeeId, request);
+        return workflowTransitionExecutionService.execute(plan, employeeId, request);
     }
 
     @Transactional
@@ -127,54 +134,7 @@ public class GenericTransitionExecutorService {
             GenericTransitionExecutionRequest request
     ) {
         GenericTransitionExecutionPlan plan = prepareActionExecution(ticketId, actionKey, employeeId);
-        return executePreparedTransition(plan, employeeId, request);
-    }
-
-    private TicketResponse executePreparedTransition(
-            GenericTransitionExecutionPlan plan,
-            String employeeId,
-            GenericTransitionExecutionRequest request
-    ) {
-        Ticket ticket = plan.ticket();
-        WorkflowTransition transition = plan.transition();
-        TicketStatus fromStatus = ticket.getStatus();
-        Long fromStatusId = plan.fromStatus().getId();
-
-        ticket.setStatus(plan.toStatusBehaviorBucket());
-        ticket.setStatusRecord(plan.toStatus());
-
-        Ticket saved = ticketRepository.save(ticket);
-        ticketWorkflowHistoryService.recordSuccessfulGenericAction(
-                saved,
-                plan.action(),
-                transition,
-                fromStatus,
-                plan.toStatusBehaviorBucket(),
-                fromStatusId,
-                plan.toStatus().getId(),
-                employeeId,
-                request == null ? null : request.getComment(),
-                request == null ? null : request.getReason(),
-                plan.systemTransition(),
-                plan.customTransition()
-        );
-
-        return TicketResponse.from(
-                saved,
-                ticketChargeService.calculateTotalCharge(saved.getId()),
-                effectiveStatusResolver.resolve(saved),
-                resolveEmployeeName(saved.getPickedByEmployeeId())
-        );
-    }
-
-    private String resolveEmployeeName(String employeeId) {
-        String lookupEmployeeId = employeeId == null ? "" : employeeId.trim();
-        if (lookupEmployeeId.isEmpty()) {
-            return null;
-        }
-        return employeeRepository.findByEmployeeIdIgnoreCase(lookupEmployeeId)
-                .map(Employee::getName)
-                .orElse(null);
+        return workflowTransitionExecutionService.execute(plan, employeeId, request);
     }
 
     @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
