@@ -33,3 +33,11 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/V20260717_04__warranty_
 ```
 
 Do not apply Phase 2D to production without separate authorization.
+
+Phase 3 test migration (after Phase 2D and tester approval only):
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/V20260717_05__warranty_phase_3_documents.sql
+```
+
+Configure a private `WARRANTY_FILE_STORAGE_ROOT` before enabling uploads. Database backup alone is no longer complete; back up the database and warranty file root as one recovery set. Do not apply Phase 3 to production without separate authorization.

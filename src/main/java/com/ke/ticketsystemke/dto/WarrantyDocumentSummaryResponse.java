@@ -1,0 +1,2 @@
+package com.ke.ticketsystemke.dto;import java.util.List;
+public record WarrantyDocumentSummaryResponse(boolean requiredDocumentsComplete,int requiredMissingCount,int recommendedMissingCount,boolean billAvailable,boolean warrantyCardAvailable,boolean serviceSlipAvailable,boolean replacementProofAvailable,List<WarrantyDocumentRequirementResponse> requirements){}
